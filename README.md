@@ -2,7 +2,7 @@
 
 ## INSTALAÇÃO DO FRONTEND
 
-* __na raiz do projeto__ npm install
-    * __caso de erro__ npm install force
+* __Na raiz do projeto:__ npm install
+    * __Caso de erro:__ npm install force
 
 ## INSTALAÇÃO DO BACKEND
