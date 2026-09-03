@@ -6,4 +6,3 @@
     * __caso de erro__ npm install force
 
 ## INSTALAÇÃO DO BACKEND
-
