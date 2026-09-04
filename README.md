@@ -9,3 +9,7 @@
 
 1. __C:\trabalho-terceiro-trimestre\backend>__ npm install
     *__Caso de erro:__ npm install force
+
+## RUN FRONTEND & BACKEND
+
+* npm run dev
