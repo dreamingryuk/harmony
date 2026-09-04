@@ -2,7 +2,10 @@
 
 ## INSTALAÇÃO DO FRONTEND
 
-* __Na raiz do projeto:__ npm install
+* __C:\trabalho-terceiro-trimestre\frontend>__ npm install
     * __Caso de erro:__ npm install force
 
 ## INSTALAÇÃO DO BACKEND
+
+1. __C:\trabalho-terceiro-trimestre\backend>__ npm install
+    *__Caso de erro:__ npm install force
