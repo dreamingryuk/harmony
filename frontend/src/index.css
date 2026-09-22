@@ -11,4 +11,5 @@ body,
 
 body {
 	min-width: 320px;
+  padding-bottom: 80px;
 }
