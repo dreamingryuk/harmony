@@ -108,11 +108,21 @@
   border-radius: 3px;
 }
 
-.bar-1 { height: 8px; }
-.bar-2 { height: 16px; }
-.bar-3 { height: 24px; }
-.bar-4 { height: 12px; }
-.bar-5 { height: 20px; }
+.bar-1 {
+  height: 8px;
+}
+.bar-2 {
+  height: 16px;
+}
+.bar-3 {
+  height: 24px;
+}
+.bar-4 {
+  height: 12px;
+}
+.bar-5 {
+  height: 20px;
+}
 
 .main-content {
   flex: 6;
@@ -152,7 +162,7 @@
 .toggle-btn.active {
   background-color: #ffffff;
   color: #172136;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .input-group {

@@ -15,7 +15,7 @@
   right: 0;
   bottom: 0;
   z-index: 1000;
-  box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .player-track {
@@ -80,7 +80,9 @@
   padding: 0;
 }
 
-.play-btn i { font-size: 14px; }
+.play-btn i {
+  font-size: 14px;
+}
 
 .icon-btn {
   background: none;

@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
-import './Login.css';
+import React, { useState } from 'react'
+import './Login.css'
 
 const Login = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(true)
 
   return (
     <div className="layout-container">
-      
       <aside className="sidebar">
         <div className="bg-circle circle-top"></div>
         <div className="bg-circle circle-center"></div>
@@ -21,7 +20,7 @@ const Login = () => {
             <div className="icon-box icon-large">
               <i className="fa-solid fa-music"></i>
             </div>
-            
+
             <div className="visualizer">
               {[...Array(20)].map((_, index) => (
                 <span key={index} className={`bar bar-${(index % 5) + 1}`}></span>
@@ -33,15 +32,14 @@ const Login = () => {
 
       <main className="main-content">
         <div className="form-card">
-          
           <div className="toggle-container">
-            <button 
+            <button
               className={`toggle-btn ${isLogin ? 'active' : ''}`}
               onClick={() => setIsLogin(true)}
             >
               Entrar
             </button>
-            <button 
+            <button
               className={`toggle-btn ${!isLogin ? 'active' : ''}`}
               onClick={() => setIsLogin(false)}
             >
@@ -60,9 +58,7 @@ const Login = () => {
             <i className="fa-regular fa-eye icon icon-clickable"></i>
           </div>
 
-          <button className="primary-btn">
-            {isLogin ? 'Entrar' : 'Criar Conta'}
-          </button>
+          <button className="primary-btn">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
 
           <div className="divider">
             <span className="line"></span>
@@ -78,12 +74,10 @@ const Login = () => {
               <span className="green-dot"></span> Spotify
             </button>
           </div>
-
         </div>
       </main>
-
     </div>
-  );
-};
+  )
+}
 
-export default Login;
+export default Login

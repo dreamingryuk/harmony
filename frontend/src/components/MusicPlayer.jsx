@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import './MusicPlayer.css';
+import { useState, useRef, useEffect } from 'react'
+import './MusicPlayer.css'
 
 async function fetchTrack() {
   return {
@@ -7,51 +7,53 @@ async function fetchTrack() {
     artist: 'Petit Biscuit',
     cover: '/covers/sunset-lover.jpg',
     audioUrl: '/audio/sunset-lover.mp3',
-  };
+  }
 }
 
 function formatTime(sec) {
-  if (!sec || isNaN(sec)) return '0:00';
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
+  if (!sec || isNaN(sec)) return '0:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, '0')
+  return `${m}:${s}`
 }
 
 export default function MusicPlayer() {
-  const audioRef = useRef(null);
-  const [track, setTrack] = useState(null);
-  const [playing, setPlaying] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState(false);
-  const [volume, setVolume] = useState(0.8);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const audioRef = useRef(null)
+  const [track, setTrack] = useState(null)
+  const [playing, setPlaying] = useState(false)
+  const [liked, setLiked] = useState(false)
+  const [shuffle, setShuffle] = useState(false)
+  const [repeat, setRepeat] = useState(false)
+  const [volume, setVolume] = useState(0.8)
+  const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
 
   useEffect(() => {
-    fetchTrack().then(setTrack);
-  }, []);
+    fetchTrack().then(setTrack)
+  }, [])
 
   useEffect(() => {
-    if (!audioRef.current) return;
-    playing ? audioRef.current.play() : audioRef.current.pause();
-  }, [playing, track]);
+    if (!audioRef.current) return
+    playing ? audioRef.current.play() : audioRef.current.pause()
+  }, [playing, track])
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
+    if (audioRef.current) audioRef.current.volume = volume
+  }, [volume])
 
   function togglePlay() {
-    setPlaying((p) => !p);
+    setPlaying((p) => !p)
   }
 
   async function playAnotherTrack() {
-    setPlaying(false);
-    setProgress(0);
-    setTrack(await fetchTrack());
+    setPlaying(false)
+    setProgress(0)
+    setTrack(await fetchTrack())
   }
 
-  if (!track) return null;
+  if (!track) return null
 
   return (
     <div className="player-bar">
@@ -76,15 +78,25 @@ export default function MusicPlayer() {
 
       <div className="player-controls">
         <div className="control-buttons">
-          <button className={`icon-btn ${shuffle ? 'active' : ''}`} onClick={() => setShuffle((s) => !s)}>
+          <button
+            className={`icon-btn ${shuffle ? 'active' : ''}`}
+            onClick={() => setShuffle((s) => !s)}
+          >
             <i className="fas fa-random"></i>
           </button>
-          <button className="icon-btn" onClick={playAnotherTrack}><i className="fas fa-step-backward"></i></button>
+          <button className="icon-btn" onClick={playAnotherTrack}>
+            <i className="fas fa-step-backward"></i>
+          </button>
           <button className="play-btn" onClick={togglePlay}>
             <i className={`fas ${playing ? 'fa-pause' : 'fa-play'}`}></i>
           </button>
-          <button className="icon-btn" onClick={playAnotherTrack}><i className="fas fa-step-forward"></i></button>
-          <button className={`icon-btn ${repeat ? 'active' : ''}`} onClick={() => setRepeat((r) => !r)}>
+          <button className="icon-btn" onClick={playAnotherTrack}>
+            <i className="fas fa-step-forward"></i>
+          </button>
+          <button
+            className={`icon-btn ${repeat ? 'active' : ''}`}
+            onClick={() => setRepeat((r) => !r)}
+          >
             <i className="fas fa-redo"></i>
           </button>
         </div>
@@ -98,8 +110,8 @@ export default function MusicPlayer() {
             max={duration || 0}
             value={progress}
             onChange={(e) => {
-              audioRef.current.currentTime = Number(e.target.value);
-              setProgress(Number(e.target.value));
+              audioRef.current.currentTime = Number(e.target.value)
+              setProgress(Number(e.target.value))
             }}
           />
           <span className="time">{formatTime(duration)}</span>
@@ -107,7 +119,9 @@ export default function MusicPlayer() {
       </div>
 
       <div className="player-extra">
-        <span className="icon-btn"><i className="fas fa-volume-up"></i></span>
+        <span className="icon-btn">
+          <i className="fas fa-volume-up"></i>
+        </span>
         <input
           type="range"
           className="volume-bar"
@@ -117,9 +131,13 @@ export default function MusicPlayer() {
           value={volume}
           onChange={(e) => setVolume(Number(e.target.value))}
         />
-        <button className="icon-btn"><i className="fas fa-ellipsis-v"></i></button>
-        <button className="icon-btn"><i className="fas fa-expand"></i></button>
+        <button className="icon-btn">
+          <i className="fas fa-ellipsis-v"></i>
+        </button>
+        <button className="icon-btn">
+          <i className="fas fa-expand"></i>
+        </button>
       </div>
     </div>
-  );
+  )
 }
