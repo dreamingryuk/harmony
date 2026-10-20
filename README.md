@@ -1,6 +1,6 @@
-# SYNQ — rede social de música
+# Harmony — rede social de música
 
-Uma plataforma social de música construída com React, Supabase e Spotify Web API. Ela permite descobrir músicas, importar playlists, favoritar faixas, conversar, postar, criar playlists e acompanhar uma retrospectiva das execuções feitas no SYNQ.
+Uma plataforma social de música construída com React, Supabase e Spotify Web API. Ela permite descobrir músicas, importar playlists, favoritar faixas, conversar, postar, criar playlists e acompanhar uma retrospectiva das execuções feitas no Harmony.
 
 ## Rodar localmente
 
@@ -8,7 +8,7 @@ Uma plataforma social de música construída com React, Supabase e Spotify Web A
 2. Execute `npm install` e depois `npm run dev`.
 3. Abra `http://localhost:5173`.
 
-Sem o `.env` o SYNQ abre em modo demonstração visual. Para funções sociais reais, crie um projeto gratuito no Supabase e execute `frontend/supabase/schema.sql` no **SQL Editor**.
+Sem o `.env` o Harmony abre em modo demonstração visual. Para funções sociais reais, crie um projeto gratuito no Supabase e execute `frontend/supabase/schema.sql` no **SQL Editor**.
 
 ## Configuração externa
 
