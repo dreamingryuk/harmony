@@ -1,0 +1,4 @@
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_chave_anon
+VITE_SPOTIFY_CLIENT_ID=seu_client_id_spotify
+# Em desenvolvimento: http://localhost:5173/spotify/callback

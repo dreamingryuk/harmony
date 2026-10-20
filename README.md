@@ -4,7 +4,7 @@ Uma plataforma social de música construída com React, Supabase e Spotify Web A
 
 ## Rodar localmente
 
-1. Entre em `frontend`, copie `.env.example` para `.env` e preencha as variáveis.
+1. Entre em `frontend`, copie `.example` para `.env` e preencha as variáveis.
 2. Execute `npm install` e depois `npm run dev`.
 3. Abra `http://localhost:5173`.
 
