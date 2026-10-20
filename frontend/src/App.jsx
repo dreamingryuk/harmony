@@ -112,7 +112,7 @@ function useSynq() {
     if (!configured)
       return setProfile({
         id: demoUser.id,
-        display_name: 'Visitante SYNQ',
+        display_name: 'Visitante Harmony',
         favorite_genres: ['Pop'],
       })
     setProfile(await ensureProfile(authUser))
@@ -122,11 +122,15 @@ function useSynq() {
       setUser(demoUser)
       return
     }
-    supabase.auth.getSession().then(async ({ data }) => {
-      setUser(data.session?.user || null)
-      if (data.session?.user) await refreshProfile(data.session.user)
-      setReady(true)
-    })
+    supabase.auth
+      .getSession()
+      .then(async ({ data, error }) => {
+        if (error) throw error
+        setUser(data.session?.user || null)
+        if (data.session?.user) await refreshProfile(data.session.user)
+      })
+      .catch((error) => console.error('Não foi possível carregar a sessão:', error))
+      .finally(() => setReady(true))
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user || null)
       if (session?.user) await refreshProfile(session.user)
@@ -147,19 +151,24 @@ function Auth() {
     event.preventDefault()
     setBusy(true)
     setMessage('')
-    const result = register
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password })
-    setBusy(false)
-    setMessage(
-      result.error?.message || (register ? 'Conta criada. Confira seu e-mail.' : 'Entrando...')
-    )
+    try {
+      const result = register
+        ? await supabase.auth.signUp({ email: email.trim(), password })
+        : await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      setMessage(
+        result.error?.message || (register ? 'Conta criada. Confira seu e-mail.' : 'Entrando...')
+      )
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível concluir a autenticação.')
+    } finally {
+      setBusy(false)
+    }
   }
   return (
     <main className="auth">
       <section className="auth-art">
         <div className="brand">
-          <Music2 /> SYNQ
+          <Music2 /> Harmony
         </div>
         <div className="equalizer">
           {Array.from({ length: 18 }, (_, i) => (
@@ -231,7 +240,7 @@ function Shell({ app, children }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <Music2 /> SYNQ
+          <Music2 /> Harmony
         </div>
         <nav>
           {nav.map(([to, label, Icon]) => (
@@ -469,7 +478,7 @@ function Discover({ app }) {
         />
         <button disabled={busy || !connected}>Buscar</button>
       </form>
-      <Section title={results.length ? 'Resultados da busca' : 'Em alta no SYNQ'}>
+      <Section title={results.length ? 'Resultados da busca' : 'Em alta no Harmony'}>
         {(results.length ? results : featured).map((track) => (
           <TrackRow key={track.spotifyId} track={track} />
         ))}
@@ -683,7 +692,7 @@ function Community({ app }) {
             <article className="post" key={post.id}>
               <span className="avatar">{initials(post.profiles?.display_name)}</span>
               <div>
-                <b>{post.profiles?.display_name || 'Ouvinte SYNQ'}</b>
+                <b>{post.profiles?.display_name || 'Ouvinte Harmony'}</b>
                 <small>{new Date(post.created_at).toLocaleString('pt-BR')}</small>
                 <p>{post.content}</p>
                 <button
@@ -857,7 +866,7 @@ function Retrospective({ app }) {
   )
   const genres = new Set(filtered.flatMap((event) => event.genres || []))
   return (
-    <Page title="Sua Retrospectiva" subtitle="O que você ouviu no SYNQ, período a período.">
+    <Page title="Sua Retrospectiva" subtitle="O que você ouviu no Harmony, período a período.">
       <div className="periods">
         {[
           ['7d', '7 dias'],
@@ -875,7 +884,7 @@ function Retrospective({ app }) {
         ))}
       </div>
       {!filtered.length ? (
-        <Empty text="Toque músicas no SYNQ para a sua retrospectiva ganhar vida!" />
+        <Empty text="Toque músicas no Harmony para a sua retrospectiva ganhar vida!" />
       ) : (
         <>
           <div className="metrics">
@@ -939,6 +948,7 @@ function Profile({ app }) {
   const save = async (event) => {
     event.preventDefault()
     if (!configured) return alert('Configure o Supabase para salvar seu perfil.')
+    if (!form.display_name.trim()) return alert('Informe um nome de exibição.')
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -961,7 +971,7 @@ function Profile({ app }) {
       <div className="profile-hero">
         <span className="avatar big">{initials(app.profile?.display_name)}</span>
         <div>
-          <h2>{app.profile?.display_name || 'Ouvinte SYNQ'}</h2>
+          <h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2>
           <p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p>
         </div>
       </div>
@@ -1012,7 +1022,7 @@ function SpotifyCallback() {
 }
 function AppRoutes() {
   const app = useSynq()
-  if (!app.ready) return <main className="callback">Carregando SYNQ...</main>
+  if (!app.ready) return <main className="callback">Carregando Harmony...</main>
   if (configured && !app.user) return <Auth />
   return (
     <Shell app={app}>

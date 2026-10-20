@@ -1,38 +1,51 @@
 # Harmony — rede social de música
 
-Uma plataforma social de música construída com React, Supabase e Spotify Web API. Ela permite descobrir músicas, importar playlists, favoritar faixas, conversar, postar, criar playlists e acompanhar uma retrospectiva das execuções feitas no Harmony.
+O Harmony é um projeto escolar de rede social musical. A aplicação permite descobrir faixas no Spotify, compartilhar publicações, conversar, salvar músicas, montar playlists e acompanhar uma retrospectiva das reproduções feitas no próprio Harmony.
 
-## Rodar localmente
+## Estrutura
 
-1. Entre em `frontend`, copie `.example` para `.env` e preencha as variáveis.
-2. Execute `npm install` e depois `npm run dev`.
-3. Abra `http://localhost:5173`.
+- `frontend/`: aplicação React com Vite. A autenticação, os dados sociais e o Realtime usam Supabase diretamente pelo cliente JavaScript.
+- `frontend/supabase/schema.sql`: estrutura do banco, índices, políticas RLS e publicação Realtime do Supabase.
+- `backend/`: API Express auxiliar, atualmente com a rota de saúde `GET /api/health`. O frontend não depende dessa API para autenticação ou dados sociais.
 
-Sem o `.env` o Harmony abre em modo demonstração visual. Para funções sociais reais, crie um projeto gratuito no Supabase e execute `frontend/supabase/schema.sql` no **SQL Editor**.
+O banco Supabase é o backend principal da aplicação hoje. A API Express é somente um ponto de partida para integrações futuras; não há rotas próprias de autenticação ou persistência nela.
 
-## Configuração externa
+## Executar localmente
 
-### Supabase
+### Frontend
 
-- Em **Authentication > Providers**, ative Email. Google é opcional.
-- Em **Authentication > URL Configuration**, inclua `http://localhost:5173` e a URL Vercel.
-- Copie Project URL e anon public key para `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
-- Rode o arquivo SQL do projeto; ele cria as tabelas, índices, Realtime e as políticas RLS.
+1. Entre em `frontend` e copie `.example` para `.env`.
+2. Preencha as variáveis `VITE_*` descritas abaixo.
+3. Execute `npm install` e `npm run dev`.
+4. Acesse `http://localhost:5173`.
 
-### Spotify
+Sem as variáveis do Supabase, a aplicação abre em modo de demonstração. Os dados desse modo não são salvos.
 
-1. Crie um app em [Spotify for Developers](https://developer.spotify.com/dashboard).
-2. Cadastre exatamente `http://localhost:5173/spotify/callback` como Redirect URI; depois inclua `https://SEU-APP.vercel.app/spotify/callback`.
-3. Copie somente o Client ID para `VITE_SPOTIFY_CLIENT_ID`. Nunca coloque Client Secret no frontend.
-4. Em desenvolvimento, inclua sua conta e as contas de teste autorizadas no painel Spotify.
+### API auxiliar (opcional)
 
-O app usa OAuth PKCE e solicita apenas leitura de playlists e permissão para salvar uma faixa na biblioteca do usuário. Ele não baixa, hospeda ou sincroniza automaticamente conteúdo do Spotify.
+1. Entre em `backend` e execute `npm install`.
+2. Execute `npm run dev` ou `npm start`.
+3. Acesse `http://localhost:3000/api/health`.
 
-## Publicação grátis na Vercel
+Defina `PORT` para mudar a porta. `CORS_ORIGIN` aceita uma ou mais origens separadas por vírgula; por padrão permite `http://localhost:5173`.
 
-1. Envie este repositório ao GitHub.
-2. Em [Vercel](https://vercel.com/new), importe o repositório e defina **Root Directory** como `frontend`.
-3. Informe as três variáveis `VITE_*` nas configurações do projeto.
-4. Faça o deploy e adicione a URL final às URLs permitidas do Supabase e à Redirect URI do Spotify.
+## Supabase
 
-`vercel.json` já permite que links diretos para as páginas da SPA funcionem.
+1. Crie um projeto Supabase e ative Email em **Authentication > Providers**. Google é opcional.
+2. Em **Authentication > URL Configuration**, permita `http://localhost:5173` e a URL publicada.
+3. Copie a URL do projeto e a chave anon/public para `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+4. Execute `frontend/supabase/schema.sql` uma vez no SQL Editor.
+
+As políticas RLS do schema protegem as operações no banco. Nunca use a chave `service_role` no frontend.
+
+## Spotify
+
+1. Crie um app no [Spotify for Developers](https://developer.spotify.com/dashboard).
+2. Cadastre `http://localhost:5173/spotify/callback` como Redirect URI e também a URL de produção equivalente.
+3. Coloque somente o Client ID em `VITE_SPOTIFY_CLIENT_ID`. O Client Secret não deve ser usado no navegador.
+
+A conexão usa OAuth PKCE. O token fica em `sessionStorage` e a aplicação não baixa nem hospeda áudio do Spotify. As prévias podem não estar disponíveis para todas as faixas.
+
+## Publicação na Vercel
+
+Importe o repositório na Vercel e use `frontend` como **Root Directory**. Configure as três variáveis `VITE_*`, publique e adicione o domínio final às URLs permitidas do Supabase e às Redirect URIs do Spotify. `frontend/vercel.json` configura o fallback das rotas da SPA.
