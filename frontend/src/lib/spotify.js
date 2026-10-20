@@ -24,8 +24,17 @@ async function challenge(verifier) {
 export function spotifyToken() {
   const raw = sessionStorage.getItem(KEYS.token)
   if (!raw) return null
-  const token = JSON.parse(raw)
-  return token.expiresAt > Date.now() ? token : null
+  try {
+    const token = JSON.parse(raw)
+    if (!token.accessToken || !Number.isFinite(token.expiresAt) || token.expiresAt <= Date.now()) {
+      disconnectSpotify()
+      return null
+    }
+    return token
+  } catch {
+    disconnectSpotify()
+    return null
+  }
 }
 
 export async function connectSpotify() {

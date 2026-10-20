@@ -1,4 +1,4 @@
--- SYNQ: execute este arquivo uma vez no SQL Editor do Supabase.
+-- Harmony: execute este arquivo uma vez no SQL Editor do Supabase.
 create extension if not exists "uuid-ossp";
 
 create table public.profiles (
