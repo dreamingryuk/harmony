@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadYoutubePlayerApi } from '../lib/youtube'
 
-export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onError }) {
+export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onError, onApiUnavailable }) {
   const containerRef = useRef(null)
-  const callbacksRef = useRef({ onReady, onStateChange, onProgress, onError })
-  callbacksRef.current = { onReady, onStateChange, onProgress, onError }
+  const [apiUnavailable, setApiUnavailable] = useState(false)
+  const callbacksRef = useRef({ onReady, onStateChange, onProgress, onError, onApiUnavailable })
+  callbacksRef.current = { onReady, onStateChange, onProgress, onError, onApiUnavailable }
 
   useEffect(() => {
     let active = true
@@ -31,7 +32,10 @@ export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onE
         }, 500)
       })
       .catch((error) => {
-        if (active) callbacksRef.current.onError?.(error.message)
+        if (!active) return
+        setApiUnavailable(true)
+        callbacksRef.current.onApiUnavailable?.(true)
+        callbacksRef.current.onError?.(error.message)
       })
 
     return () => {
@@ -40,6 +44,19 @@ export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onE
       player?.destroy()
     }
   }, [videoId])
+
+  if (apiUnavailable) {
+    return (
+      <iframe
+        className="youtube-player-fallback"
+        title="Player do YouTube"
+        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?playsinline=1&rel=0`}
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    )
+  }
 
   return <div className="youtube-player-frame" ref={containerRef} aria-label="Player do YouTube" />
 }

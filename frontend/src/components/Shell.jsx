@@ -98,7 +98,8 @@ export function Player({ app }) {
     [playing, setPlaying] = useState(false),
     [progress, setProgress] = useState(0),
     [duration, setDuration] = useState(0),
-    [playerError, setPlayerError] = useState('')
+    [playerError, setPlayerError] = useState(''),
+    [playerApiUnavailable, setPlayerApiUnavailable] = useState(false)
   const youtubePlayer = useRef(null),
     playRequested = useRef(false),
     logged = useRef(new Set())
@@ -111,6 +112,7 @@ export function Player({ app }) {
       setProgress(0)
       setDuration(0)
       setPlayerError('')
+      setPlayerApiUnavailable(false)
     }
     window.addEventListener('synq-play', listener)
     return () => window.removeEventListener('synq-play', listener)
@@ -182,6 +184,7 @@ export function Player({ app }) {
           videoId={track.youtubeId}
           onReady={handleYoutubeReady}
           onStateChange={handleYoutubeState}
+          onApiUnavailable={setPlayerApiUnavailable}
           onProgress={(current, total) => {
             setProgress(current)
             setDuration(total)
@@ -191,8 +194,13 @@ export function Player({ app }) {
               101: 'Este vídeo não permite reprodução incorporada.',
               150: 'Este vídeo não permite reprodução incorporada.',
               5: 'O YouTube não conseguiu reproduzir este vídeo.',
+              153: 'O YouTube não confirmou a origem do player. Verifique as restrições do domínio ou abra a faixa diretamente no YouTube.',
             }
-            setPlayerError(messages[error] || error || 'Ocorreu um erro no player do YouTube.')
+            setPlayerError(
+              messages[error] ||
+                error ||
+                'Não foi possível carregar os controles do YouTube. Tente reproduzir pelo vídeo incorporado.'
+            )
             setPlaying(false)
           }}
         />
@@ -205,21 +213,25 @@ export function Player({ app }) {
       </div>
       {isYoutube ? (
         <>
-          <button className="play" onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproduzir'}>
-            {playing ? 'Ⅱ' : <Play fill="currentColor" />}
-          </button>
-          <input
-            aria-label="Progresso"
-            className="progress"
-            type="range"
-            min="0"
-            max={duration || 1}
-            value={Math.min(progress, duration || 1)}
-            onChange={(event) => {
-              youtubePlayer.current?.seekTo(Number(event.target.value), true)
-              setProgress(Number(event.target.value))
-            }}
-          />
+          {!playerApiUnavailable && (
+            <>
+              <button className="play" onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproduzir'}>
+                {playing ? 'Ⅱ' : <Play fill="currentColor" />}
+              </button>
+              <input
+                aria-label="Progresso"
+                className="progress"
+                type="range"
+                min="0"
+                max={duration || 1}
+                value={Math.min(progress, duration || 1)}
+                onChange={(event) => {
+                  youtubePlayer.current?.seekTo(Number(event.target.value), true)
+                  setProgress(Number(event.target.value))
+                }}
+              />
+            </>
+          )}
         </>
       ) : (
         <iframe
