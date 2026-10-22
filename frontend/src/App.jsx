@@ -202,7 +202,9 @@ function useSynq() {
         display_name: 'Visitante Harmony',
         favorite_genres: ['Pop'],
       })
-    setProfile(await ensureProfile(authUser))
+    const nextProfile = await ensureProfile(authUser)
+    setProfile(nextProfile)
+    window.dispatchEvent(new CustomEvent('synq-profile-updated', { detail: nextProfile }))
   }, [])
   useEffect(() => {
     if (!configured) {
@@ -840,6 +842,19 @@ function Community({ app }) {
     return () => supabase.removeChannel(channel)
   }, [load])
   useEffect(() => {
+    const syncProfile = (event) => {
+      const updated = event.detail
+      if (updated?.id !== app.user.id) return
+      setPosts((current) =>
+        current.map((post) =>
+          post.author_id === updated.id ? { ...post, author: { ...post.author, ...updated } } : post
+        )
+      )
+    }
+    window.addEventListener('synq-profile-updated', syncProfile)
+    return () => window.removeEventListener('synq-profile-updated', syncProfile)
+  }, [app.user.id])
+  useEffect(() => {
     if (!configured) return
     supabase.from('playlists').select('*, playlist_tracks(*)').eq('owner_id', app.user.id).eq('is_public', true).then(({ data }) => setPlaylists(data || []))
   }, [app.user.id])
@@ -956,6 +971,20 @@ function Messages({ app }) {
         .neq('id', app.user.id)
         .then(({ data }) => setProfiles(data || []))
   }, [app.user])
+  useEffect(() => {
+    const syncProfile = (event) => {
+      const updated = event.detail
+      if (!updated?.id) return
+      setProfiles((current) =>
+        current.map((profile) => (profile.id === updated.id ? { ...profile, ...updated } : profile))
+      )
+      setSelected((current) =>
+        current?.id === updated.id ? { ...current, ...updated } : current
+      )
+    }
+    window.addEventListener('synq-profile-updated', syncProfile)
+    return () => window.removeEventListener('synq-profile-updated', syncProfile)
+  }, [])
   useEffect(() => {
     if (!configured) return
     supabase.from('playlists').select('*, playlist_tracks(*)').eq('owner_id', app.user.id).eq('is_public', true).then(({ data }) => setPlaylists(data || []))
@@ -1329,15 +1358,234 @@ function GenrePicker({ selectedGenres, onChange }) {
   )
 }
 
+function AvatarCropDialog({ image, onSave, onCancel, busy }) {
+  const canvasRef = useRef(null)
+  const dragRef = useRef(null)
+  const dialogRef = useRef(null)
+  const closeButtonRef = useRef(null)
+  const [zoom, setZoom] = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [error, setError] = useState('')
+  const frameSize = 280
+
+  const imageLayout = useCallback(() => {
+    const scale = Math.max(frameSize / image.naturalWidth, frameSize / image.naturalHeight) * zoom
+    return {
+      scale,
+      width: image.naturalWidth * scale,
+      height: image.naturalHeight * scale,
+    }
+  }, [image, zoom])
+  const clampOffset = useCallback((nextOffset) => {
+    const { width, height } = imageLayout()
+    return {
+      x: Math.min(0, Math.max(frameSize - width, nextOffset.x)),
+      y: Math.min(0, Math.max(frameSize - height, nextOffset.y)),
+    }
+  }, [imageLayout])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !image.complete) return
+    const context = canvas.getContext('2d')
+    const { scale, width, height } = imageLayout()
+    const cropOffset = clampOffset(offset)
+    const imageX = (frameSize - width) / 2 + cropOffset.x
+    const imageY = (frameSize - height) / 2 + cropOffset.y
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(
+      image,
+      -imageX / scale,
+      -imageY / scale,
+      frameSize / scale,
+      frameSize / scale,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    )
+  }, [clampOffset, image, imageLayout, offset])
+
+  useEffect(() => {
+    closeButtonRef.current?.focus()
+  }, [])
+  const handleDialogKeyDown = (event) => {
+    if (event.key === 'Escape' && !busy) {
+      event.preventDefault()
+      onCancel()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = dialogRef.current?.querySelectorAll(
+      'button:not(:disabled), input:not(:disabled)'
+    )
+    if (!focusable?.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  const handlePointerDown = (event) => {
+    if (busy) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offset,
+    }
+  }
+  const handlePointerMove = (event) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const frameScale = frameSize / bounds.width
+    setOffset(
+      clampOffset({
+        x: dragRef.current.offset.x + (event.clientX - dragRef.current.startX) * frameScale,
+        y: dragRef.current.offset.y + (event.clientY - dragRef.current.startY) * frameScale,
+      })
+    )
+  }
+  const save = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    setError('')
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setError('Não foi possível preparar a foto. Tente outra imagem.')
+          return
+        }
+        if (blob.size > 5 * 1024 * 1024) {
+          setError('A imagem recortada excede o limite de 5 MB. Reduza o zoom ou escolha outra foto.')
+          return
+        }
+        onSave(blob)
+      },
+      'image/webp',
+      0.9
+    )
+  }
+
+  return (
+    <div className="modal-backdrop avatar-modal-backdrop">
+      <section
+        className="modal avatar-crop-modal"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="avatar-crop-title"
+        aria-describedby="avatar-crop-help"
+        onKeyDown={handleDialogKeyDown}
+      >
+        <header>
+          <div>
+            <h2 id="avatar-crop-title">Ajustar foto de perfil</h2>
+            <p id="avatar-crop-help">Arraste a imagem para ajustar o recorte quadrado.</p>
+          </div>
+          <button
+            className="icon"
+            type="button"
+            ref={closeButtonRef}
+            aria-label="Cancelar edição da foto"
+            onClick={onCancel}
+            disabled={busy}
+          >
+            <X />
+          </button>
+        </header>
+        <canvas
+          className="avatar-crop-canvas"
+          ref={canvasRef}
+          width="512"
+          height="512"
+          aria-label="Pré-visualização do recorte da foto"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={() => {
+            dragRef.current = null
+          }}
+          onPointerCancel={() => {
+            dragRef.current = null
+          }}
+        />
+        <label className="avatar-zoom">
+          Zoom
+          <input
+            type="range"
+            min="1"
+            max="3"
+            step="0.05"
+            value={zoom}
+            aria-label="Zoom da foto"
+            onChange={(event) => {
+              setZoom(Number(event.target.value))
+              setOffset((current) => clampOffset(current))
+            }}
+            disabled={busy}
+          />
+        </label>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="modal-actions avatar-modal-actions">
+          <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+            Cancelar
+          </button>
+          <span />
+          <button type="button" className="primary" onClick={save} disabled={busy}>
+            {busy ? 'Salvando foto...' : 'Salvar foto'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function Profile({ app }) {
   const [form, setForm] = useState({ display_name: '', bio: '', favorite_genres: [] })
-  const [avatarBusy, setAvatarBusy] = useState(false), [settingsOpen, setSettingsOpen] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(''),
+    [avatarSource, setAvatarSource] = useState(''),
+    [avatarImage, setAvatarImage] = useState(null),
+    [settingsOpen, setSettingsOpen] = useState(false)
+  const avatarInputRef = useRef(null)
   const [account, setAccount] = useState({ email: '', password: '', passwordConfirmation: '', deletion: '' })
   const [notice, setNotice] = useState('')
   useEffect(() => {
     setForm({ display_name: app.profile?.display_name || '', bio: app.profile?.bio || '', favorite_genres: app.profile?.favorite_genres || [] })
     setAccount((current) => ({ ...current, email: app.user?.email || '' }))
   }, [app.profile, app.user?.email])
+  useEffect(() => {
+    if (!avatarSource) {
+      setAvatarImage(null)
+      return undefined
+    }
+    let active = true
+    const image = new Image()
+    image.onload = () => {
+      if (active) setAvatarImage(image)
+    }
+    image.onerror = () => {
+      if (active) {
+        setNotice('Não foi possível abrir essa imagem. Escolha outro arquivo.')
+        setAvatarSource('')
+      }
+    }
+    image.src = avatarSource
+    return () => {
+      active = false
+      URL.revokeObjectURL(avatarSource)
+    }
+  }, [avatarSource])
   const save = async (event) => {
     event.preventDefault()
     if (!configured) return setNotice('Configure o Supabase para salvar seu perfil.')
@@ -1346,25 +1594,66 @@ function Profile({ app }) {
     if (error) setNotice(error.message)
     else { await app.refreshProfile(app.user); setNotice('Perfil salvo com sucesso.') }
   }
-  const uploadAvatar = async (event) => {
+  const chooseAvatar = (event) => {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
     if (!configured) return setNotice('Configure o Supabase para enviar uma foto de perfil.')
     const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
-    if (!extensions[file.type] || file.size > 5 * 1024 * 1024) return setNotice('Escolha uma imagem JPG, PNG ou WebP de até 5 MB.')
+    if (!extensions[file.type]) return setNotice('Formato inválido. Escolha uma imagem JPEG, PNG ou WebP.')
+    if (file.size > 5 * 1024 * 1024) return setNotice('A imagem é grande demais. O limite é 5 MB.')
+    setNotice('')
+    setAvatarSource(URL.createObjectURL(file))
+  }
+  const uploadAvatar = async (blob) => {
+    if (!configured) return setNotice('Configure o Supabase para enviar uma foto de perfil.')
     try {
-      setAvatarBusy(true)
-      const path = `${app.user.id}/avatar-${Date.now()}.${extensions[file.type]}`
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type })
-      if (uploadError) throw uploadError
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-      const { error: profileError } = await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', app.user.id)
-      if (profileError) { await supabase.storage.from('avatars').remove([path]); throw profileError }
-      const oldPath = app.profile?.avatar_url?.split('/avatars/')[1]
-      if (oldPath?.startsWith(`${app.user.id}/`)) await supabase.storage.from('avatars').remove([oldPath])
-      await app.refreshProfile(app.user); setNotice('Foto de perfil atualizada.')
-    } catch (error) { setNotice(`Não foi possível enviar a foto: ${error.message}`) } finally { setAvatarBusy(false) }
+      setAvatarBusy('upload')
+      const extension = blob.type.split('/')[1] || 'webp'
+      const file = new File([blob], `avatar.${extension}`, { type: blob.type || 'image/webp' })
+      const body = new FormData()
+      body.append('file', file)
+      const { error } = await supabase.functions.invoke('avatar', { body })
+      if (error) {
+        let message = error.message
+        if (error.context instanceof Response) {
+          const response = await error.context.json().catch(() => null)
+          if (response?.error) message = response.error
+        }
+        await app.refreshProfile(app.user)
+        throw new Error(message)
+      }
+      await app.refreshProfile(app.user)
+      setAvatarSource('')
+      setNotice('Foto de perfil atualizada.')
+    } catch (error) {
+      setNotice(`Não foi possível enviar a foto: ${error.message}`)
+    } finally {
+      setAvatarBusy('')
+    }
+  }
+  const removeAvatar = async () => {
+    if (!app.profile?.avatar_url) return
+    if (!window.confirm('Remover sua foto de perfil? Seu avatar padrão será exibido.')) return
+    try {
+      setAvatarBusy('remove')
+      const { error } = await supabase.functions.invoke('avatar', { body: { action: 'remove' } })
+      if (error) {
+        let message = error.message
+        if (error.context instanceof Response) {
+          const response = await error.context.json().catch(() => null)
+          if (response?.error) message = response.error
+        }
+        await app.refreshProfile(app.user)
+        throw new Error(message)
+      }
+      await app.refreshProfile(app.user)
+      setNotice('Foto de perfil removida.')
+    } catch (error) {
+      setNotice(`Não foi possível remover a foto: ${error.message}`)
+    } finally {
+      setAvatarBusy('')
+    }
   }
   const updateEmail = async (event) => {
     event.preventDefault()
@@ -1396,7 +1685,8 @@ function Profile({ app }) {
     await supabase.auth.signOut()
   }
   return <Page title="Seu Perfil" subtitle="Faça seu perfil soar como você.">
-    <div className="profile-hero"><div className="avatar-editor"><Avatar profile={app.profile} className="big" /><label className="avatar-upload"><Camera /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={avatarBusy} /></label></div><div><h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2><p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p></div></div>
+    <div className="profile-hero"><div><div className="avatar-editor"><button type="button" className="avatar-trigger" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)} aria-label="Alterar foto de perfil"><Avatar profile={app.profile} className="big" /></button><button type="button" className="avatar-upload" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)} aria-label="Selecionar nova foto"><Camera /></button><input ref={avatarInputRef} className="avatar-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} disabled={Boolean(avatarBusy)} /></div><div className="avatar-actions"><button type="button" className="secondary small-button" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)}>{avatarBusy === 'upload' ? 'Enviando...' : 'Alterar foto'}</button>{app.profile?.avatar_url && <button type="button" className="text-button" onClick={removeAvatar} disabled={Boolean(avatarBusy)}>{avatarBusy === 'remove' ? 'Removendo...' : 'Remover foto'}</button>}</div></div><div><h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2><p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p></div></div>
+    {avatarSource && avatarImage && <AvatarCropDialog image={avatarImage} onSave={uploadAvatar} onCancel={() => setAvatarSource('')} busy={avatarBusy === 'upload'} />}
     {notice && <p className="notice profile-notice" role="status">{notice}</p>}
     <form className="profile-form" onSubmit={save}>
       <label>Nome de exibição<input value={form.display_name} maxLength="80" onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>

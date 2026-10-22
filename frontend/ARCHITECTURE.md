@@ -13,7 +13,7 @@ O frontend acessa Supabase diretamente. O diretório `backend/` na raiz contém 
 - `saved_tracks`, `playlists` e `playlist_tracks`: biblioteca e playlists do Harmony.
 - `listening_events`: reproduções iniciadas no player Harmony. A retrospectiva usa esses eventos; ela não lê o histórico privado completo do Spotify.
 
-O schema e as políticas Row Level Security estão em `supabase/schema.sql`. Execute-o uma vez em um projeto novo do Supabase; depois, aplique os complementos `supabase/profile-playlists-notifications.sql` e `supabase/profile-genres.sql` para habilitar as políticas adicionais e validar os gêneros favoritos também no banco.
+O schema e as políticas Row Level Security estão em `supabase/schema.sql`. Execute-o uma vez em um projeto novo do Supabase; depois, aplique os complementos `supabase/profile-playlists-notifications.sql` e `supabase/profile-genres.sql` para habilitar as políticas adicionais e validar os gêneros favoritos também no banco. A função `supabase/functions/avatar` processa as fotos de perfil no servidor; publique-a com `supabase functions deploy avatar` após configurar o projeto.
 
 ## Configuração e segurança
 

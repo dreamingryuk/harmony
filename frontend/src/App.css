@@ -839,10 +839,21 @@ button {
 .conversation form { flex-wrap: wrap; }
 .conversation form .share-picker { order: 3; width: 100%; }
 .conversation form .share-picker .attached { margin: 0; }
-.avatar-editor { position: relative; }
-.avatar-upload { position: absolute; right: -4px; bottom: -4px; width: 29px; height: 29px; background: var(--green); color: #fff; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; cursor: pointer; }
+.avatar-editor { position: relative; width: max-content; }
+.avatar-trigger { display: block; border: 0; border-radius: 50%; background: transparent; padding: 0; }
+.avatar-trigger:focus-visible, .avatar-upload:focus-visible { outline: 3px solid #087456; outline-offset: 3px; }
+.avatar-upload { position: absolute; right: -4px; bottom: -4px; width: 32px; height: 32px; background: var(--green); color: #fff; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; cursor: pointer; padding: 0; }
+.avatar-upload:disabled { opacity: .65; cursor: wait; }
 .avatar-upload svg { width: 15px; }
-.avatar-upload input { display: none; }
+.avatar-file-input { display: none; }
+.avatar-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.avatar-crop-modal { box-sizing: border-box; width: min(430px, 100%); }
+.avatar-crop-modal header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.avatar-crop-canvas { display: block; width: min(280px, calc(100vw - 80px)); height: auto; margin: 24px auto 18px; border-radius: 50%; background: #eaf0ed; cursor: grab; touch-action: none; }
+.avatar-crop-canvas:active { cursor: grabbing; }
+.avatar-zoom { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; font-size: 13px; font-weight: 700; }
+.avatar-zoom input { accent-color: var(--green); width: 100%; }
+.avatar-modal-actions { gap: 8px; }
 .profile-notice { margin: 14px 0 -8px; }
 .genre-picker { position: relative; }
 .genre-input { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 0 8px; }
