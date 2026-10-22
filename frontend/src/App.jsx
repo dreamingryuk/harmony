@@ -36,6 +36,7 @@ import {
   spotifyPlaylistTracks,
   spotifyPlaylists,
   spotifyToken,
+  FALLBACK_COVER,
 } from './lib/spotify'
 import './App.css'
 
@@ -103,6 +104,20 @@ const fromJson = (track) =>
     genres: track.genres || [],
   }
 const play = (track) => window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+
+function CoverArt({ src, alt = '', className }) {
+  return (
+    <img
+      className={className}
+      src={src || FALLBACK_COVER}
+      alt={alt}
+      onError={(event) => {
+        event.currentTarget.onerror = null
+        event.currentTarget.src = FALLBACK_COVER
+      }}
+    />
+  )
+}
 
 function useSynq() {
   const [user, setUser] = useState(null),
@@ -332,7 +347,7 @@ function Player({ app }) {
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onEnded={() => setPlaying(false)}
       />
-      <img src={track.coverUrl} alt="" />
+      <CoverArt src={track.coverUrl} />
       <div className="player-track">
         <b>{track.title}</b>
         <span>{track.artists}</span>
@@ -374,7 +389,7 @@ function TrackRow({ track, saved, onToggleSave }) {
   }
   return (
     <article className="track-row">
-      <img src={track.coverUrl} alt={`Capa de ${track.album}`} />
+      <CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} />
       <button className="track-copy" onClick={() => play(track)}>
         <b>{track.title}</b>
         <span>
@@ -426,8 +441,20 @@ function Empty({ text }) {
 function Discover({ app }) {
   const [query, setQuery] = useState(''),
     [results, setResults] = useState([]),
-    [busy, setBusy] = useState(false)
-  const connected = Boolean(spotifyToken())
+    [busy, setBusy] = useState(false),
+    [spotifyConnected, setSpotifyConnected] = useState(Boolean(spotifyToken()))
+  const handleSpotifyConnection = async () => {
+    try {
+      if (spotifyConnected) {
+        disconnectSpotify()
+        setSpotifyConnected(false)
+        return
+      }
+      await connectSpotify()
+    } catch (error) {
+      alert(error.message)
+    }
+  }
   const search = async (event) => {
     event.preventDefault()
     if (!query.trim()) return
@@ -455,11 +482,8 @@ function Discover({ app }) {
             Conecte seu Spotify, importe suas playlists e encontre gente que vibra na mesma
             frequência.
           </p>
-          <button
-            className="primary"
-            onClick={() => (connected ? disconnectSpotify() : connectSpotify())}
-          >
-            {connected ? 'Desconectar Spotify' : 'Conectar Spotify'}
+          <button className="primary" onClick={handleSpotifyConnection}>
+            {spotifyConnected ? 'Desconectar Spotify' : 'Conectar Spotify'}
           </button>
         </div>
         <Music2 className="hero-icon" />
@@ -470,13 +494,13 @@ function Discover({ app }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
-            connected
+            spotifyConnected
               ? 'Busque uma faixa, álbum ou artista...'
               : 'Conecte o Spotify para buscar no catálogo'
           }
-          disabled={!connected}
+          disabled={!spotifyConnected}
         />
-        <button disabled={busy || !connected}>Buscar</button>
+        <button disabled={busy || !spotifyConnected}>Buscar</button>
       </form>
       <Section title={results.length ? 'Resultados da busca' : 'Em alta no Harmony'}>
         {(results.length ? results : featured).map((track) => (
@@ -600,7 +624,7 @@ function Library({ app }) {
         <Section title="Escolha playlists para importar">
           {imports.map((item) => (
             <article className="import-row" key={item.id}>
-              <img src={item.images?.[0]?.url} alt="" />
+              <CoverArt src={item.images?.[0]?.url} alt={`Capa de ${item.name}`} />
               <span>
                 <b>{item.name}</b>
                 <small>{item.tracks.total} faixas</small>
@@ -641,13 +665,20 @@ function Library({ app }) {
 
 function Community({ app }) {
   const [posts, setPosts] = useState([]),
-    [content, setContent] = useState('')
+    [content, setContent] = useState(''),
+    [error, setError] = useState(''),
+    [publishing, setPublishing] = useState(false)
   const load = useCallback(async () => {
     if (!configured) return
-    const { data } = await supabase
+    const { data, error: queryError } = await supabase
       .from('posts')
-      .select('*, profiles(display_name), post_likes(user_id)')
+      .select('*, author:profiles!posts_author_id_fkey(display_name), post_likes(user_id)')
       .order('created_at', { ascending: false })
+    if (queryError) {
+      setError(`Não foi possível carregar o feed: ${queryError.message}`)
+      return
+    }
+    setError('')
     setPosts(data || [])
   }, [])
   useEffect(() => {
@@ -656,22 +687,43 @@ function Community({ app }) {
     const channel = supabase
       .channel('synq-posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, load)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [load])
   const publish = async (event) => {
     event.preventDefault()
     if (!content.trim()) return
-    await supabase.from('posts').insert({ author_id: app.user.id, content })
-    setContent('')
-    load()
+    if (!configured) return setError('Configure o Supabase para publicar na comunidade.')
+    try {
+      setPublishing(true)
+      const { error: insertError } = await supabase
+        .from('posts')
+        .insert({ author_id: app.user.id, content: content.trim() })
+      if (insertError) throw insertError
+      setContent('')
+      await load()
+    } catch (publishError) {
+      setError(`Não foi possível publicar: ${publishError.message}`)
+    } finally {
+      setPublishing(false)
+    }
   }
   const like = async (post) => {
-    const exists = post.post_likes?.some((like) => like.user_id === app.user.id)
-    if (exists)
-      await supabase.from('post_likes').delete().eq('post_id', post.id).eq('user_id', app.user.id)
-    else await supabase.from('post_likes').insert({ post_id: post.id, user_id: app.user.id })
-    load()
+    try {
+      const exists = post.post_likes?.some((like) => like.user_id === app.user.id)
+      const { error: likeError } = exists
+        ? await supabase
+            .from('post_likes')
+            .delete()
+            .eq('post_id', post.id)
+            .eq('user_id', app.user.id)
+        : await supabase.from('post_likes').insert({ post_id: post.id, user_id: app.user.id })
+      if (likeError) throw likeError
+      await load()
+    } catch (likeError) {
+      setError(`Não foi possível atualizar a curtida: ${likeError.message}`)
+    }
   }
   return (
     <Page title="Comunidade" subtitle="O que está tocando na cabeça de todo mundo?">
@@ -682,17 +734,22 @@ function Community({ app }) {
           onChange={(e) => setContent(e.target.value)}
           placeholder="Compartilhe uma descoberta, um álbum ou uma sensação..."
         />
-        <button className="primary">
+        <button className="primary" disabled={publishing}>
           <Send /> Publicar
         </button>
       </form>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
       <Section title="Feed">
         {posts.length ? (
           posts.map((post) => (
             <article className="post" key={post.id}>
-              <span className="avatar">{initials(post.profiles?.display_name)}</span>
+              <span className="avatar">{initials(post.author?.display_name)}</span>
               <div>
-                <b>{post.profiles?.display_name || 'Ouvinte Harmony'}</b>
+                <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
                 <small>{new Date(post.created_at).toLocaleString('pt-BR')}</small>
                 <p>{post.content}</p>
                 <button
