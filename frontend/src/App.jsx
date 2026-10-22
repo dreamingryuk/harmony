@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { configured } from './lib/supabase'
 import { useSynq, useUnreadMessages } from './hooks/useSynq'
 import { Shell } from './components/Shell'
+import { SettingsErrorBoundary } from './components/SettingsErrorBoundary'
 import { Auth } from './pages/Auth'
 import { Discover } from './pages/Discover'
 import { Library } from './pages/Library'
@@ -36,7 +37,14 @@ function AppRoutes() {
         <Route path="/mensagens" element={<Messages app={app} />} />
         <Route path="/retrospectiva" element={<Retrospective app={app} />} />
         <Route path="/perfil" element={<Profile app={app} />} />
-        <Route path="/configuracoes" element={<AccountSettings app={app} />} />
+        <Route
+          path="/configuracoes"
+          element={
+            <SettingsErrorBoundary>
+              <AccountSettings app={app} />
+            </SettingsErrorBoundary>
+          }
+        />
         <Route path="/redefinir-senha" element={<ResetPassword app={app} />} />
         <Route path="/spotify/callback" element={<SpotifyCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />

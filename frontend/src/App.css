@@ -844,6 +844,7 @@ button {
 .conversation form { flex-wrap: wrap; }
 .conversation form .share-picker { order: 3; width: 100%; }
 .conversation form .share-picker .attached { margin: 0; }
+.conversation .share-menu { top: auto; bottom: calc(100% + 8px); }
 .avatar-editor { position: relative; width: max-content; }
 .avatar-trigger { display: block; border: 0; border-radius: 50%; background: transparent; padding: 0; }
 .avatar-trigger:focus-visible, .avatar-upload:focus-visible { outline: 3px solid #087456; outline-offset: 3px; }

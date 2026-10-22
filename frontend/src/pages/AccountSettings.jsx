@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ShieldCheck } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Page } from '../components/Media'
 import { PasswordField } from '../components/PasswordField'

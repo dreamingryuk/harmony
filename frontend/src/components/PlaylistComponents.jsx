@@ -72,12 +72,17 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
 
 export function SharePicker({ playlists = [], attachment, onChange }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
-  const search = async (event) => {
-    event.preventDefault(); if (!query.trim()) return
+  const search = async () => {
+    if (!query.trim()) return
     try { setBusy(true); setResults(await searchTracks(query.trim())) } catch (error) { alert(error.message) } finally { setBusy(false) }
+  }
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    search()
   }
   return <div className="share-picker">
     {attachment ? <div className="attached"><AttachmentCard attachment={attachment} compact /><button className="icon" aria-label="Remover anexo" onClick={() => onChange(null)}><X /></button></div> : <button type="button" className="secondary small-button" onClick={() => setOpen(!open)}><Plus /> Música ou playlist</button>}
-    {open && !attachment && <div className="share-menu"><form className="inline-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar música no Spotify" /><button className="secondary" disabled={busy}>Buscar</button></form>{results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}<b className="picker-label">Suas playlists públicas</b>{playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}</div>}
+    {open && !attachment && <div className="share-menu"><div className="inline-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Buscar música no Spotify" /><button type="button" className="secondary" onClick={search} disabled={busy}>Buscar</button></div>{results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}<b className="picker-label">Suas playlists públicas</b>{playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}</div>}
   </div>
 }
