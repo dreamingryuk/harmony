@@ -849,12 +849,16 @@ button {
 .genre-input:focus-within { outline: 2px solid #a5e7cc; border-color: var(--green); }
 .genre-input svg { width: 18px; color: var(--muted); }
 .genre-input input { flex: 1; border: 0; outline: 0; padding: 11px 0; min-width: 0; }
+.genre-input button { border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 5px; }
+.genre-input button:focus-visible, .genre-options button:focus-visible, .genre-chips button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .genre-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .genre-chips button { border: 0; border-radius: 16px; background: #e3f7ee; color: #087456; padding: 5px 8px; display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .genre-chips svg { width: 13px; }
-.genre-options { max-height: 225px; overflow: auto; border: 1px solid var(--line); background: #fff; border-radius: 10px; margin-top: 6px; padding: 6px; box-shadow: 0 10px 23px rgba(20, 44, 34, .12); }
+.genre-options { max-height: 300px; overflow: auto; border: 1px solid var(--line); background: #fff; border-radius: 10px; margin-top: 6px; padding: 6px; box-shadow: 0 10px 23px rgba(20, 44, 34, .12); }
 .genre-options button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 7px; }
 .genre-options button:hover, .genre-options button.selected { background: #e9faf3; color: #087456; }
+.genre-options button.active { outline: 2px solid #a5e7cc; outline-offset: -2px; }
+.genre-options mark { background: #ffe7a3; color: inherit; border-radius: 2px; }
 .genre-options p { font-size: 13px; color: var(--muted); padding: 0 8px; }
 .account-settings { margin-top: 35px; border-top: 1px solid var(--line); padding-top: 26px; }
 .account-settings h2 { display: flex; align-items: center; gap: 8px; }

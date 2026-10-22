@@ -25,8 +25,8 @@ import {
   BarChart3,
   Bell,
   Camera,
+  ChevronDown,
   Eye,
-  EyeOff,
   ListMusic,
   LogOut,
   Pencil,
@@ -37,6 +37,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { configured, ensureProfile, supabase } from './lib/supabase'
+import { GENRES, highlightGenreMatch, normalizeGenre } from './lib/genres'
 import {
   connectSpotify,
   disconnectSpotify,
@@ -114,11 +115,6 @@ const fromJson = (track) =>
     genres: track.genres || [],
   }
 const play = (track) => window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
-const normalise = (value = '') =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
 const isPlaylistAttachment = (attachment) => attachment?.type === 'playlist'
 const attachmentTrack = (attachment) =>
   attachment?.type === 'track' ? fromJson(attachment.track) : fromJson(attachment)
@@ -130,16 +126,6 @@ const playlistAttachment = (playlist) => ({
   cover_color: playlist.cover_color || 'green',
   track_count: playlist.playlist_tracks?.length || 0,
 })
-const GENRES = [
-  'Afrobeats', 'Alternativo', 'Ambient', 'Axé', 'Blues', 'Bossa Nova', 'Breakbeat', 'Chillout',
-  'Clássica', 'Country', 'Dance', 'Disco', 'Drum and Bass', 'Dub', 'EDM', 'Eletrônica', 'Emo',
-  'Folk', 'Forró', 'Funk', 'Funk carioca', 'Gospel', 'Grime', 'Heavy Metal', 'Hip Hop', 'House',
-  'Indie', 'Instrumental', 'Jazz', 'K-pop', 'Lo-fi', 'Música latina', 'MPB', 'New Wave', 'Pagode',
-  'Pop', 'Pop punk', 'Post-punk', 'Psicodélico', 'Punk', 'R&B', 'Rap', 'Reggae', 'Reggaeton',
-  'Rock', 'Rock alternativo', 'Rock brasileiro', 'Samba', 'Sertanejo', 'Soul', 'Synthpop', 'Techno',
-  'Trance', 'Trap', 'Vaporwave'
-].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-
 function CoverArt({ src, alt = '', className }) {
   return (
     <img
@@ -1191,9 +1177,160 @@ function Retrospective({ app }) {
   )
 }
 
+function GenrePicker({ selectedGenres, onChange }) {
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const pickerRef = useRef(null)
+  const filteredGenres = useMemo(
+    () => GENRES.filter((genre) => normalizeGenre(genre).includes(normalizeGenre(query))),
+    [query]
+  )
+  const close = useCallback(() => {
+    setIsOpen(false)
+    setQuery('')
+    setActiveIndex(-1)
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const closeOnOutsideClick = (event) => {
+      if (!pickerRef.current?.contains(event.target)) close()
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
+  }, [close, isOpen])
+
+  useEffect(() => {
+    if (activeIndex < 0) return
+    document.getElementById(`genre-option-${activeIndex}`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex])
+
+  const selectGenre = (genre) => {
+    onChange(
+      selectedGenres.includes(genre)
+        ? selectedGenres.filter((selected) => selected !== genre)
+        : [...selectedGenres, genre]
+    )
+    setQuery('')
+    setActiveIndex(-1)
+  }
+  const handleKeyDown = (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setIsOpen(true)
+      if (!filteredGenres.length) return
+      setActiveIndex((current) => {
+        if (event.key === 'ArrowDown') return current >= filteredGenres.length - 1 ? 0 : current + 1
+        return current <= 0 ? filteredGenres.length - 1 : current - 1
+      })
+    } else if (event.key === 'Enter' && isOpen && activeIndex >= 0) {
+      event.preventDefault()
+      selectGenre(filteredGenres[activeIndex])
+    } else if (event.key === 'Escape' && isOpen) {
+      event.preventDefault()
+      close()
+    } else if (event.key === 'Tab' && isOpen) {
+      close()
+    }
+  }
+
+  return (
+    <div
+      className="genre-picker"
+      ref={pickerRef}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) close()
+      }}
+    >
+      <div className="genre-input">
+        <Search aria-hidden="true" />
+        <input
+          id="genre-search"
+          type="text"
+          role="combobox"
+          aria-label="Buscar gêneros favoritos"
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          aria-controls="genre-options"
+          aria-activedescendant={activeIndex >= 0 ? `genre-option-${activeIndex}` : undefined}
+          value={query}
+          onFocus={() => setIsOpen(true)}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setActiveIndex(-1)
+            setIsOpen(true)
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="Busque um gênero musical"
+        />
+        <button
+          type="button"
+          className="icon"
+          tabIndex={-1}
+          aria-label={isOpen ? 'Fechar gêneros' : 'Abrir gêneros'}
+          aria-expanded={isOpen}
+          onClick={() => (isOpen ? close() : setIsOpen(true))}
+        >
+          <ChevronDown aria-hidden="true" />
+        </button>
+      </div>
+      {selectedGenres.length > 0 && (
+        <div className="genre-chips" aria-label="Gêneros selecionados">
+          {selectedGenres.map((genre) => (
+            <button
+              type="button"
+              key={genre}
+              aria-label={`Remover ${genre}`}
+              onClick={() => selectGenre(genre)}
+            >
+              {genre} <X aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      )}
+      {isOpen && (
+        <div className="genre-options" id="genre-options" role="listbox" aria-multiselectable="true">
+          {filteredGenres.length ? (
+            filteredGenres.map((genre, index) => {
+              const match = highlightGenreMatch(genre, query)
+              const isSelected = selectedGenres.includes(genre)
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  id={`genre-option-${index}`}
+                  aria-selected={isSelected}
+                  tabIndex={-1}
+                  className={`${isSelected ? 'selected' : ''} ${activeIndex === index ? 'active' : ''}`}
+                  key={genre}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectGenre(genre)}
+                >
+                  <span aria-hidden="true">{isSelected ? '✓ ' : ''}</span>
+                  {match ? (
+                    <>
+                      {match.before}
+                      <mark>{match.match}</mark>
+                      {match.after}
+                    </>
+                  ) : (
+                    genre
+                  )}
+                </button>
+              )
+            })
+          ) : (
+            <p role="status">Nenhum gênero encontrado</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Profile({ app }) {
   const [form, setForm] = useState({ display_name: '', bio: '', favorite_genres: [] })
-  const [genreQuery, setGenreQuery] = useState(''), [genresOpen, setGenresOpen] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false), [settingsOpen, setSettingsOpen] = useState(false)
   const [account, setAccount] = useState({ email: '', password: '', passwordConfirmation: '', deletion: '' })
   const [notice, setNotice] = useState('')
@@ -1209,7 +1346,6 @@ function Profile({ app }) {
     if (error) setNotice(error.message)
     else { await app.refreshProfile(app.user); setNotice('Perfil salvo com sucesso.') }
   }
-  const toggleGenre = (genre) => setForm((current) => ({ ...current, favorite_genres: current.favorite_genres.includes(genre) ? current.favorite_genres.filter((item) => item !== genre) : [...current.favorite_genres, genre] }))
   const uploadAvatar = async (event) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -1259,15 +1395,17 @@ function Profile({ app }) {
     if (error) return setNotice(`Não foi possível excluir: ${error.message}. Confirme se a Edge Function foi publicada.`)
     await supabase.auth.signOut()
   }
-  const filteredGenres = GENRES.filter((genre) => normalise(genre).includes(normalise(genreQuery)))
   return <Page title="Seu Perfil" subtitle="Faça seu perfil soar como você.">
     <div className="profile-hero"><div className="avatar-editor"><Avatar profile={app.profile} className="big" /><label className="avatar-upload"><Camera /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={avatarBusy} /></label></div><div><h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2><p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p></div></div>
     {notice && <p className="notice profile-notice" role="status">{notice}</p>}
     <form className="profile-form" onSubmit={save}>
       <label>Nome de exibição<input value={form.display_name} maxLength="80" onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>
       <label>Bio<textarea value={form.bio} maxLength="300" onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
-      <label>Gêneros favoritos</label>
-      <div className="genre-picker"><div className="genre-input"><Search /><input value={genreQuery} onFocus={() => setGenresOpen(true)} onChange={(event) => { setGenreQuery(event.target.value); setGenresOpen(true) }} placeholder="Busque um gênero musical" /><button type="button" className="icon" aria-label="Abrir gêneros" onClick={() => setGenresOpen(!genresOpen)}>{genresOpen ? <EyeOff /> : <Eye />}</button></div>{form.favorite_genres.length > 0 && <div className="genre-chips">{form.favorite_genres.map((genre) => <button type="button" key={genre} onClick={() => toggleGenre(genre)}>{genre} <X /></button>)}</div>}{genresOpen && <div className="genre-options">{filteredGenres.length ? filteredGenres.map((genre) => <button type="button" className={form.favorite_genres.includes(genre) ? 'selected' : ''} key={genre} onClick={() => toggleGenre(genre)}>{form.favorite_genres.includes(genre) ? '✓ ' : ''}{genre}</button>) : <p>Nenhum gênero encontrado.</p>}</div>}</div>
+      <label htmlFor="genre-search">Gêneros favoritos</label>
+      <GenrePicker
+        selectedGenres={form.favorite_genres}
+        onChange={(favorite_genres) => setForm((current) => ({ ...current, favorite_genres }))}
+      />
       <button className="primary">Salvar alterações</button>
     </form>
     <section className="account-settings"><header><div><h2><Settings /> Configurações da conta</h2><p>Gerencie seu acesso e dados de segurança.</p></div><button className="secondary" onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? 'Fechar' : 'Abrir'}</button></header>{settingsOpen && <div className="settings-grid"><form onSubmit={updateEmail}><h3>Alterar e-mail</h3><p>E-mail atual: <b>{app.user?.email}</b></p><input type="email" value={account.email} onChange={(event) => setAccount({ ...account, email: event.target.value })} /><button className="secondary">Solicitar alteração</button></form><form onSubmit={updatePassword}><h3>Alterar senha</h3><input type="password" minLength="8" value={account.password} placeholder="Nova senha" onChange={(event) => setAccount({ ...account, password: event.target.value })} /><input type="password" minLength="8" value={account.passwordConfirmation} placeholder="Confirmar nova senha" onChange={(event) => setAccount({ ...account, passwordConfirmation: event.target.value })} /><button className="secondary">Salvar nova senha</button><button type="button" className="text-button" onClick={sendRecovery}>Enviar link de recuperação</button></form><form className="danger-zone" onSubmit={(event) => { event.preventDefault(); deleteAccount() }}><h3><ShieldCheck /> Excluir conta</h3><p>Isso remove permanentemente seus dados, mensagens, playlists e avatar.</p><input value={account.deletion} placeholder="Digite EXCLUIR" onChange={(event) => setAccount({ ...account, deletion: event.target.value })} /><button className="danger-button">Excluir definitivamente</button></form></div>}</section>
