@@ -25,6 +25,8 @@ import {
   BarChart3,
   LogOut,
   ExternalLink,
+  X,
+  ListMusic,
 } from 'lucide-react'
 import { configured, ensureProfile, supabase } from './lib/supabase'
 import {
@@ -247,6 +249,27 @@ function Auth() {
 function Shell({ app, children }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  useEffect(() => {
+    if (!configured || !app.user) return
+    const channel = supabase
+      .channel(`synq-notifications-${app.user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          if (payload.new.recipient_id !== app.user.id) return
+          setUnreadMessages((count) => count + 1)
+          if (window.Notification?.permission === 'granted') {
+            new Notification('Nova mensagem no Harmony', {
+              body: 'Você recebeu uma nova mensagem.',
+            })
+          }
+        }
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [app.user])
   const logout = async () => {
     if (configured) await supabase.auth.signOut()
     navigate('/')
@@ -290,9 +313,11 @@ function Shell({ app, children }) {
             key={to}
             to={to}
             className={location.pathname === to ? 'active' : ''}
+            onClick={() => to === '/mensagens' && setUnreadMessages(0)}
           >
             <Icon />
             <span>{label}</span>
+            {to === '/mensagens' && unreadMessages > 0 && <i className="notification-dot" />}
           </NavLink>
         ))}
       </nav>
@@ -305,7 +330,8 @@ function Player({ app }) {
   const [track, setTrack] = useState(null),
     [playing, setPlaying] = useState(false),
     [progress, setProgress] = useState(0),
-    [duration, setDuration] = useState(0)
+    [duration, setDuration] = useState(0),
+    [showEmbed, setShowEmbed] = useState(false)
   const audio = useRef(null),
     logged = useRef(new Set())
   useEffect(() => {
@@ -313,18 +339,24 @@ function Player({ app }) {
       setTrack(event.detail)
       setPlaying(false)
       setProgress(0)
+      setShowEmbed(false)
     }
     window.addEventListener('synq-play', listener)
     return () => window.removeEventListener('synq-play', listener)
   }, [])
   const toggle = async () => {
     if (!track) return
-    if (!track.previewUrl) return window.open(track.spotifyUrl, '_blank', 'noopener')
+    if (!track.previewUrl) return setShowEmbed(true)
     if (playing) {
       audio.current.pause()
       setPlaying(false)
     } else {
-      await audio.current.play()
+      try {
+        await audio.current.play()
+      } catch {
+        setShowEmbed(true)
+        return
+      }
       setPlaying(true)
       if (configured && !logged.current.has(track.spotifyId)) {
         logged.current.add(track.spotifyId)
@@ -339,38 +371,59 @@ function Player({ app }) {
   }
   if (!track) return null
   return (
-    <footer className="player">
-      <audio
-        ref={audio}
-        src={track.previewUrl}
-        onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={() => setPlaying(false)}
-      />
-      <CoverArt src={track.coverUrl} />
-      <div className="player-track">
-        <b>{track.title}</b>
-        <span>{track.artists}</span>
-      </div>
-      <button className="play" onClick={toggle}>
-        {playing ? 'Ⅱ' : <Play fill="currentColor" />}
-      </button>
-      <input
-        aria-label="Progresso"
-        className="progress"
-        type="range"
-        min="0"
-        max={duration || 1}
-        value={progress}
-        onChange={(e) => {
-          audio.current.currentTime = +e.target.value
-          setProgress(+e.target.value)
-        }}
-      />
-      <a title="Abrir no Spotify" href={track.spotifyUrl} target="_blank" rel="noreferrer">
-        <ExternalLink />
-      </a>
-    </footer>
+    <>
+      {showEmbed && (
+        <div className="embed-overlay" role="dialog" aria-modal="true" aria-label="Player Spotify">
+          <section className="spotify-embed-panel">
+            <button
+              className="icon close-embed"
+              onClick={() => setShowEmbed(false)}
+              aria-label="Fechar player"
+            >
+              <X />
+            </button>
+            <p>Reprodução oficial do Spotify</p>
+            <iframe
+              title={`Player de ${track.title}`}
+              src={`https://open.spotify.com/embed/track/${track.spotifyId}?utm_source=generator`}
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            />
+          </section>
+        </div>
+      )}
+      <footer className="player">
+        <audio
+          ref={audio}
+          src={track.previewUrl}
+          onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onEnded={() => setPlaying(false)}
+        />
+        <CoverArt src={track.coverUrl} />
+        <div className="player-track">
+          <b>{track.title}</b>
+          <span>{track.artists}</span>
+        </div>
+        <button className="play" onClick={toggle}>
+          {playing ? 'Ⅱ' : <Play fill="currentColor" />}
+        </button>
+        <input
+          aria-label="Progresso"
+          className="progress"
+          type="range"
+          min="0"
+          max={duration || 1}
+          value={progress}
+          onChange={(e) => {
+            audio.current.currentTime = +e.target.value
+            setProgress(+e.target.value)
+          }}
+        />
+        <a title="Abrir no Spotify" href={track.spotifyUrl} target="_blank" rel="noreferrer">
+          <ExternalLink />
+        </a>
+      </footer>
+    </>
   )
 }
 
@@ -434,6 +487,114 @@ function Empty({ text }) {
     <div className="empty">
       <Music2 />
       <p>{text}</p>
+    </div>
+  )
+}
+
+function SharedMusic({ item }) {
+  if (!item) return null
+  const playlist = item.kind === 'playlist'
+  const title = playlist ? item.title : item.title
+  const subtitle = playlist ? `${item.track_count || 0} faixas · Playlist` : item.artists
+  return (
+    <article className="shared-music">
+      <CoverArt src={item.coverUrl || item.cover_url} alt="" />
+      <div>
+        <b>{title}</b>
+        <span>{subtitle}</span>
+      </div>
+      {playlist && item.spotifyUrl ? (
+        <a href={item.spotifyUrl} target="_blank" rel="noreferrer">
+          <ExternalLink />
+        </a>
+      ) : (
+        !playlist && (
+          <button className="icon" onClick={() => play(fromJson(item) || item)}>
+            <Play />
+          </button>
+        )
+      )}
+    </article>
+  )
+}
+
+function MusicPicker({ app, open, onClose, onPick }) {
+  const [query, setQuery] = useState(''),
+    [results, setResults] = useState([]),
+    [playlists, setPlaylists] = useState([]),
+    [error, setError] = useState('')
+  useEffect(() => {
+    if (!open || !configured) return
+    supabase
+      .from('playlists')
+      .select('id,title,imported_spotify_id,playlist_tracks(count)')
+      .eq('owner_id', app.user.id)
+      .then(({ data, error: loadError }) => {
+        if (loadError) setError(loadError.message)
+        else setPlaylists(data || [])
+      })
+  }, [open, app.user])
+  if (!open) return null
+  const search = async (event) => {
+    event.preventDefault()
+    try {
+      setError('')
+      setResults(await searchTracks(query))
+    } catch (searchError) {
+      setError(searchError.message)
+    }
+  }
+  const pickPlaylist = (playlist) =>
+    onPick({
+      kind: 'playlist',
+      title: playlist.title,
+      track_count: playlist.playlist_tracks?.[0]?.count || 0,
+      coverUrl: FALLBACK_COVER,
+      spotifyUrl: playlist.imported_spotify_id
+        ? `https://open.spotify.com/playlist/${playlist.imported_spotify_id}`
+        : '',
+    })
+  return (
+    <div className="embed-overlay" role="dialog" aria-modal="true">
+      <section className="music-picker">
+        <button className="icon close-embed" onClick={onClose}>
+          <X />
+        </button>
+        <h2>Compartilhar música ou playlist</h2>
+        <form className="search" onSubmit={search}>
+          <Search />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar música no Spotify"
+          />
+          <button>Buscar</button>
+        </form>
+        {error && <p className="form-error">{error}</p>}
+        {results.map((track) => (
+          <button className="picker-row" key={track.spotifyId} onClick={() => onPick(track)}>
+            <CoverArt src={track.coverUrl} />
+            <span>
+              <b>{track.title}</b>
+              <small>{track.artists}</small>
+            </span>
+            <Plus />
+          </button>
+        ))}
+        <h3>Suas playlists</h3>
+        {playlists.map((playlist) => (
+          <button className="picker-row" key={playlist.id} onClick={() => pickPlaylist(playlist)}>
+            <span className="playlist-icon">
+              <ListMusic />
+            </span>
+            <span>
+              <b>{playlist.title}</b>
+              <small>Playlist</small>
+            </span>
+            <Plus />
+          </button>
+        ))}
+      </section>
     </div>
   )
 }
@@ -667,7 +828,9 @@ function Community({ app }) {
   const [posts, setPosts] = useState([]),
     [content, setContent] = useState(''),
     [error, setError] = useState(''),
-    [publishing, setPublishing] = useState(false)
+    [publishing, setPublishing] = useState(false),
+    [sharedMusic, setSharedMusic] = useState(null),
+    [pickerOpen, setPickerOpen] = useState(false)
   const load = useCallback(async () => {
     if (!configured) return
     const { data, error: queryError } = await supabase
@@ -697,11 +860,18 @@ function Community({ app }) {
     if (!configured) return setError('Configure o Supabase para publicar na comunidade.')
     try {
       setPublishing(true)
-      const { error: insertError } = await supabase
-        .from('posts')
-        .insert({ author_id: app.user.id, content: content.trim() })
+      const { error: insertError } = await supabase.from('posts').insert({
+        author_id: app.user.id,
+        content: content.trim(),
+        track: sharedMusic
+          ? sharedMusic.kind === 'playlist'
+            ? sharedMusic
+            : trackJson(sharedMusic)
+          : null,
+      })
       if (insertError) throw insertError
       setContent('')
+      setSharedMusic(null)
       await load()
     } catch (publishError) {
       setError(`Não foi possível publicar: ${publishError.message}`)
@@ -734,10 +904,28 @@ function Community({ app }) {
           onChange={(e) => setContent(e.target.value)}
           placeholder="Compartilhe uma descoberta, um álbum ou uma sensação..."
         />
+        <button
+          type="button"
+          className="icon"
+          onClick={() => setPickerOpen(true)}
+          aria-label="Adicionar música ou playlist"
+        >
+          <Music2 />
+        </button>
         <button className="primary" disabled={publishing}>
           <Send /> Publicar
         </button>
       </form>
+      {sharedMusic && <SharedMusic item={sharedMusic} />}
+      <MusicPicker
+        app={app}
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(item) => {
+          setSharedMusic(item)
+          setPickerOpen(false)
+        }}
+      />
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -752,6 +940,7 @@ function Community({ app }) {
                 <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
                 <small>{new Date(post.created_at).toLocaleString('pt-BR')}</small>
                 <p>{post.content}</p>
+                {post.track && <SharedMusic item={post.track} />}
                 <button
                   className={`like ${post.post_likes?.some((x) => x.user_id === app.user.id) ? 'liked' : ''}`}
                   onClick={() => like(post)}
@@ -780,7 +969,9 @@ function Messages({ app }) {
   const [profiles, setProfiles] = useState([]),
     [selected, setSelected] = useState(null),
     [messages, setMessages] = useState([]),
-    [text, setText] = useState('')
+    [text, setText] = useState(''),
+    [sharedMusic, setSharedMusic] = useState(null),
+    [pickerOpen, setPickerOpen] = useState(false)
   useEffect(() => {
     if (configured)
       supabase
@@ -811,13 +1002,19 @@ function Messages({ app }) {
   }, [load])
   const send = async (event) => {
     event.preventDefault()
-    if (!text.trim() || !selected) return
+    if ((!text.trim() && !sharedMusic) || !selected) return
     await supabase.from('messages').insert({
       sender_id: app.user.id,
       recipient_id: selected.id,
       content: text.trim(),
+      track: sharedMusic
+        ? sharedMusic.kind === 'playlist'
+          ? sharedMusic
+          : trackJson(sharedMusic)
+        : null,
     })
     setText('')
+    setSharedMusic(null)
     load()
   }
   return (
@@ -848,9 +1045,13 @@ function Messages({ app }) {
               </header>
               <div className="chat">
                 {messages.map((message) => (
-                  <p className={message.sender_id === app.user.id ? 'mine' : ''} key={message.id}>
+                  <div
+                    className={`message-bubble ${message.sender_id === app.user.id ? 'mine' : ''}`}
+                    key={message.id}
+                  >
                     {message.content}
-                  </p>
+                    {message.track && <SharedMusic item={message.track} />}
+                  </div>
                 ))}
               </div>
               <form onSubmit={send}>
@@ -859,10 +1060,28 @@ function Messages({ app }) {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Digite uma mensagem..."
                 />
+                <button
+                  type="button"
+                  className="icon"
+                  onClick={() => setPickerOpen(true)}
+                  aria-label="Compartilhar música ou playlist"
+                >
+                  <Music2 />
+                </button>
                 <button className="primary">
                   <Send />
                 </button>
               </form>
+              {sharedMusic && <SharedMusic item={sharedMusic} />}
+              <MusicPicker
+                app={app}
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onPick={(item) => {
+                  setSharedMusic(item)
+                  setPickerOpen(false)
+                }}
+              />
             </>
           ) : (
             <Empty text="Escolha alguém para iniciar uma conversa." />
