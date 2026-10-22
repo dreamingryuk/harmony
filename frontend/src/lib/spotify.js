@@ -88,10 +88,12 @@ export async function finishSpotifyConnection(code, state) {
   )
   sessionStorage.removeItem(KEYS.verifier)
   sessionStorage.removeItem(KEYS.state)
+  window.dispatchEvent(new Event('harmony-music-connections-changed'))
 }
 
 export function disconnectSpotify() {
   Object.values(KEYS).forEach((key) => sessionStorage.removeItem(key))
+  window.dispatchEvent(new Event('harmony-music-connections-changed'))
 }
 
 async function spotifyFetch(path, options = {}) {
@@ -117,6 +119,7 @@ async function spotifyFetch(path, options = {}) {
 
 export function toTrack(track) {
   return {
+    platform: 'spotify',
     spotifyId: track.id,
     uri: track.uri,
     title: track.name,
@@ -125,6 +128,7 @@ export function toTrack(track) {
     coverUrl: track.album?.images?.find((image) => image?.url)?.url || FALLBACK_COVER,
     previewUrl: track.preview_url || '',
     spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+    externalUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
     genres: track.genres || [],
   }
 }

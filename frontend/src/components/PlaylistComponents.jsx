@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ExternalLink, Eye, ListMusic, Play, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { searchTracks } from '../lib/spotify'
+import { searchYoutubeTracks } from '../lib/youtube'
+import { useMusicConnections } from '../hooks/useMusicConnections'
 import { attachmentTrack, fromJson, isPlaylistAttachment, play, playlistAttachment, trackJson } from '../utils/track'
 import { CoverArt } from './Media'
 
@@ -9,7 +11,7 @@ export function AttachmentCard({ attachment, onOpenPlaylist, compact = false }) 
   if (!attachment) return null
   if (isPlaylistAttachment(attachment)) {
     return (
-      <button className={`attachment playlist-attachment ${compact ? 'compact' : ''}`} onClick={() => onOpenPlaylist?.(attachment.playlist_id)}>
+      <button type="button" className={`attachment playlist-attachment ${compact ? 'compact' : ''}`} onClick={() => onOpenPlaylist?.(attachment.playlist_id)}>
         <span className="playlist-art small"><ListMusic /></span>
         <span><b>{attachment.title}</b><small>Playlist · {attachment.track_count || 0} faixas</small></span>
         <ExternalLink />
@@ -18,7 +20,7 @@ export function AttachmentCard({ attachment, onOpenPlaylist, compact = false }) 
   }
   const track = attachmentTrack(attachment)
   if (!track) return null
-  return <button className={`attachment track-attachment ${compact ? 'compact' : ''}`} onClick={() => play(track)}><CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} /><span><b>{track.title}</b><small>{track.artists}</small></span><Play fill="currentColor" /></button>
+  return <button type="button" className={`attachment track-attachment ${compact ? 'compact' : ''}`} onClick={() => play(track)}><CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} /><span><b>{track.title}</b><small>{track.artists}</small></span><Play fill="currentColor" /></button>
 }
 
 export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = false }) {
@@ -48,7 +50,18 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
   }
   const search = async (event) => {
     event.preventDefault(); if (!query.trim()) return
-    try { setBusy(true); setResults(await searchTracks(query.trim())) } catch (error) { alert(error.message) } finally { setBusy(false) }
+    try {
+      setBusy(true)
+      setResults(
+        platform === 'youtube'
+          ? await searchYoutubeTracks(query.trim())
+          : await searchTracks(query.trim())
+      )
+    } catch (error) {
+      alert(error.message)
+    } finally {
+      setBusy(false)
+    }
   }
   const addTrack = async (track) => {
     if (isNew) return alert('Salve a playlist antes de adicionar faixas.')
@@ -70,10 +83,18 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
   </section></div>
 }
 
-export function SharePicker({ playlists = [], attachment, onChange }) {
-  const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
+export function SharePicker({ playlists = [], attachment, onChange, userId }) {
+  const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false), [platform, setPlatform] = useState('spotify')
+  const { connections } = useMusicConnections(userId)
+  const availablePlatforms = Object.entries(connections).filter(([, connected]) => connected).map(([name]) => name)
+
+  useEffect(() => {
+    if (!connections[platform] && availablePlatforms.length) setPlatform(availablePlatforms[0])
+  }, [availablePlatforms, connections, platform])
+
   const search = async () => {
     if (!query.trim()) return
+    if (!connections[platform]) return alert('Conecte uma plataforma de música para pesquisar.')
     try { setBusy(true); setResults(await searchTracks(query.trim())) } catch (error) { alert(error.message) } finally { setBusy(false) }
   }
   const handleSearchKeyDown = (event) => {
@@ -82,7 +103,18 @@ export function SharePicker({ playlists = [], attachment, onChange }) {
     search()
   }
   return <div className="share-picker">
-    {attachment ? <div className="attached"><AttachmentCard attachment={attachment} compact /><button className="icon" aria-label="Remover anexo" onClick={() => onChange(null)}><X /></button></div> : <button type="button" className="secondary small-button" onClick={() => setOpen(!open)}><Plus /> Música ou playlist</button>}
-    {open && !attachment && <div className="share-menu"><div className="inline-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Buscar música no Spotify" /><button type="button" className="secondary" onClick={search} disabled={busy}>Buscar</button></div>{results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}<b className="picker-label">Suas playlists públicas</b>{playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}</div>}
+    {attachment ? <div className="attached"><AttachmentCard attachment={attachment} compact /><button type="button" className="icon" aria-label="Remover anexo" onClick={() => onChange(null)}><X /></button></div> : <button type="button" className="secondary small-button" onClick={() => setOpen(!open)}><Plus /> Música ou playlist</button>}
+    {open && !attachment && <div className="share-menu">
+      {availablePlatforms.length > 1 && <label className="music-source">Pesquisar em
+        <select value={platform} onChange={(event) => { setPlatform(event.target.value); setResults([]) }}>
+          {availablePlatforms.map((name) => <option key={name} value={name}>{name === 'youtube' ? 'YouTube Music' : 'Spotify'}</option>)}
+        </select>
+      </label>}
+      <div className="inline-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder={platform === 'youtube' ? 'Buscar música no YouTube' : 'Buscar música no Spotify'} disabled={!connections[platform]} /><button type="button" className="secondary" onClick={search} disabled={busy || !connections[platform]}>Buscar</button></div>
+      {!availablePlatforms.length && <p className="hint">Conecte uma plataforma na aba Descobrir para pesquisar músicas.</p>}
+      {results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}
+      <b className="picker-label">Suas playlists públicas</b>
+      {playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}
+    </div>}
   </div>
 }

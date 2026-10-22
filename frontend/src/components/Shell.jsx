@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { ExternalLink, Home, Library as LibraryIcon, LogOut, MessageCircle, Music2, Play, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { trackJson } from '../utils/track'
 import { Avatar, CoverArt } from './Media'
+import { YouTubePlayer } from './YouTubePlayer'
 
 const nav = [
   ['/', 'Descobrir', Home],
@@ -96,69 +97,146 @@ export function Player({ app }) {
   const [track, setTrack] = useState(null),
     [playing, setPlaying] = useState(false),
     [progress, setProgress] = useState(0),
-    [duration, setDuration] = useState(0)
-  const audio = useRef(null),
+    [duration, setDuration] = useState(0),
+    [playerError, setPlayerError] = useState('')
+  const youtubePlayer = useRef(null),
+    playRequested = useRef(false),
     logged = useRef(new Set())
   useEffect(() => {
     const listener = (event) => {
+      youtubePlayer.current = null
+      playRequested.current = false
       setTrack(event.detail)
       setPlaying(false)
       setProgress(0)
+      setDuration(0)
+      setPlayerError('')
     }
     window.addEventListener('synq-play', listener)
     return () => window.removeEventListener('synq-play', listener)
   }, [])
+
+  const logPlayback = useCallback(async (playedTrack) => {
+    if (!configured || logged.current.has(playedTrack.spotifyId)) return
+    logged.current.add(playedTrack.spotifyId)
+    try {
+      const { error } = await supabase.from('listening_events').insert({
+        user_id: app.user.id,
+        track: trackJson(playedTrack),
+        artist_name: playedTrack.artists,
+        genres: playedTrack.genres || [],
+      })
+      if (error) console.error('Não foi possível registrar a reprodução:', error)
+    } catch (error) {
+      console.error('Não foi possível registrar a reprodução:', error)
+    }
+  }, [app.user.id])
+
+  const handleYoutubeReady = useCallback((player) => {
+    youtubePlayer.current = player
+    if (playRequested.current) {
+      playRequested.current = false
+      try {
+        player.playVideo()
+      } catch (error) {
+        setPlayerError(error.message || 'Não foi possível iniciar a reprodução.')
+      }
+    }
+  }, [])
+
+  const handleYoutubeState = useCallback((state) => {
+    const youtubeStates = window.YT?.PlayerState
+    const isPlaying = state === youtubeStates?.PLAYING
+    setPlaying(isPlaying)
+    if (state === youtubeStates?.ENDED) {
+      setProgress(0)
+      return
+    }
+    if (isPlaying && track) logPlayback(track)
+  }, [logPlayback, track])
+
   const toggle = async () => {
     if (!track) return
-    if (!track.previewUrl) return window.open(track.spotifyUrl, '_blank', 'noopener')
-    if (playing) {
-      audio.current.pause()
-      setPlaying(false)
-    } else {
-      await audio.current.play()
-      setPlaying(true)
-      if (configured && !logged.current.has(track.spotifyId)) {
-        logged.current.add(track.spotifyId)
-        await supabase.from('listening_events').insert({
-          user_id: app.user.id,
-          track: trackJson(track),
-          artist_name: track.artists,
-          genres: track.genres || [],
-        })
+    if (track.platform !== 'youtube') return
+    try {
+      setPlayerError('')
+      if (playing) {
+        youtubePlayer.current?.pauseVideo()
+        setPlaying(false)
+      } else if (youtubePlayer.current) {
+        youtubePlayer.current.playVideo()
+      } else {
+        playRequested.current = true
       }
+    } catch (error) {
+      setPlayerError(error.message || 'Não foi possível controlar a reprodução.')
     }
   }
   if (!track) return null
+  const isYoutube = track.platform === 'youtube' && track.youtubeId
   return (
-    <footer className="player">
-      <audio
-        ref={audio}
-        src={track.previewUrl}
-        onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={() => setPlaying(false)}
-      />
-      <CoverArt src={track.coverUrl} />
+    <footer className={`player ${isYoutube ? 'youtube-player' : 'spotify-player'}`}>
+      {isYoutube ? (
+        <YouTubePlayer
+          key={track.youtubeId}
+          videoId={track.youtubeId}
+          onReady={handleYoutubeReady}
+          onStateChange={handleYoutubeState}
+          onProgress={(current, total) => {
+            setProgress(current)
+            setDuration(total)
+          }}
+          onError={(error) => {
+            const messages = {
+              101: 'Este vídeo não permite reprodução incorporada.',
+              150: 'Este vídeo não permite reprodução incorporada.',
+              5: 'O YouTube não conseguiu reproduzir este vídeo.',
+            }
+            setPlayerError(messages[error] || error || 'Ocorreu um erro no player do YouTube.')
+            setPlaying(false)
+          }}
+        />
+      ) : (
+        <CoverArt src={track.coverUrl} />
+      )}
       <div className="player-track">
         <b>{track.title}</b>
         <span>{track.artists}</span>
       </div>
-      <button className="play" onClick={toggle}>
-        {playing ? 'Ⅱ' : <Play fill="currentColor" />}
-      </button>
-      <input
-        aria-label="Progresso"
-        className="progress"
-        type="range"
-        min="0"
-        max={duration || 1}
-        value={progress}
-        onChange={(e) => {
-          audio.current.currentTime = +e.target.value
-          setProgress(+e.target.value)
-        }}
-      />
-      <a title="Abrir no Spotify" href={track.spotifyUrl} target="_blank" rel="noreferrer">
+      {isYoutube ? (
+        <>
+          <button className="play" onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproduzir'}>
+            {playing ? 'Ⅱ' : <Play fill="currentColor" />}
+          </button>
+          <input
+            aria-label="Progresso"
+            className="progress"
+            type="range"
+            min="0"
+            max={duration || 1}
+            value={Math.min(progress, duration || 1)}
+            onChange={(event) => {
+              youtubePlayer.current?.seekTo(Number(event.target.value), true)
+              setProgress(Number(event.target.value))
+            }}
+          />
+        </>
+      ) : (
+        <iframe
+          className="spotify-embed"
+          title={`Reproduzir ${track.title} no Spotify`}
+          src={`https://open.spotify.com/embed/track/${encodeURIComponent(track.spotifyId)}?utm_source=generator&theme=0`}
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+        />
+      )}
+      {playerError && <span className="player-error" role="status">{playerError}</span>}
+      <a
+        title={isYoutube ? 'Abrir no YouTube' : 'Abrir no Spotify'}
+        href={track.externalUrl || track.spotifyUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
         <ExternalLink />
       </a>
     </footer>

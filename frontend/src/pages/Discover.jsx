@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Music2, Search, Sparkles } from 'lucide-react'
-import { connectSpotify, disconnectSpotify, searchTracks, spotifyToken } from '../lib/spotify'
+import { connectSpotify, searchTracks } from '../lib/spotify'
+import { searchYoutubeTracks, youtubeApiKey } from '../lib/youtube'
+import { useMusicConnections } from '../hooks/useMusicConnections'
 import { Page, Section, TrackRow } from '../components/Media'
 
 const featured = [
@@ -32,15 +35,28 @@ export function Discover({ app }) {
   const [query, setQuery] = useState(''),
     [results, setResults] = useState([]),
     [busy, setBusy] = useState(false),
-    [spotifyConnected, setSpotifyConnected] = useState(Boolean(spotifyToken()))
-  const handleSpotifyConnection = async () => {
+    [activePlatform, setActivePlatform] = useState('spotify'),
+    [showPlatformOptions, setShowPlatformOptions] = useState(false)
+  const { connections, connectYoutube } = useMusicConnections(app.user.id)
+  const connectedPlatforms = Object.entries(connections)
+    .filter(([, connected]) => connected)
+    .map(([platform]) => platform)
+
+  useEffect(() => {
+    if (!connections[activePlatform] && connectedPlatforms.length) {
+      setActivePlatform(connectedPlatforms[0])
+    }
+  }, [activePlatform, connections, connectedPlatforms])
+
+  const connectPlatform = async (platform) => {
     try {
-      if (spotifyConnected) {
-        disconnectSpotify()
-        setSpotifyConnected(false)
-        return
+      if (platform === 'spotify') {
+        await connectSpotify()
+      } else {
+        connectYoutube()
+        setActivePlatform('youtube')
       }
-      await connectSpotify()
+      setShowPlatformOptions(false)
     } catch (error) {
       alert(error.message)
     }
@@ -50,7 +66,11 @@ export function Discover({ app }) {
     if (!query.trim()) return
     try {
       setBusy(true)
-      setResults(await searchTracks(query))
+      setResults(
+        activePlatform === 'youtube'
+          ? await searchYoutubeTracks(query.trim())
+          : await searchTracks(query.trim())
+      )
     } catch (error) {
       alert(error.message)
     } finally {
@@ -69,12 +89,57 @@ export function Discover({ app }) {
           </span>
           <h2>O próximo som que vai virar seu favorito.</h2>
           <p>
-            Conecte seu Spotify, importe suas playlists e encontre gente que vibra na mesma
-            frequência.
+            Conecte uma plataforma de música, importe playlists do Spotify e encontre gente que
+            vibra na mesma frequência.
           </p>
-          <button className="primary" onClick={handleSpotifyConnection}>
-            {spotifyConnected ? 'Desconectar Spotify' : 'Conectar Spotify'}
-          </button>
+          {!connectedPlatforms.length ? (
+            <div className="music-connect">
+              <button className="primary" onClick={() => setShowPlatformOptions((open) => !open)}>
+                Conectar com plataforma de música
+              </button>
+              {showPlatformOptions && (
+                <div className="music-connect-options">
+                  <button className="secondary" onClick={() => connectPlatform('spotify')}>
+                    Conectar Spotify
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => connectPlatform('youtube')}
+                    disabled={!youtubeApiKey()}
+                    title={!youtubeApiKey() ? 'O site ainda precisa configurar a chave da API do YouTube.' : undefined}
+                  >
+                    Ativar YouTube Music
+                  </button>
+                  {!youtubeApiKey() && (
+                    <p className="hint">O YouTube Music ainda não foi configurado neste site.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="music-platforms">
+              {connectedPlatforms.length > 1 ? (
+                connectedPlatforms.map((platform) => (
+                  <button
+                    type="button"
+                    className={activePlatform === platform ? 'active' : ''}
+                    key={platform}
+                    onClick={() => {
+                      setActivePlatform(platform)
+                      setResults([])
+                    }}
+                  >
+                    {platform === 'youtube' ? 'YouTube Music' : 'Spotify'}
+                  </button>
+                ))
+              ) : (
+                <span>
+                  Conectado a {activePlatform === 'youtube' ? 'YouTube Music' : 'Spotify'} ·{' '}
+                  <Link to="/configuracoes">Gerenciar plataformas</Link>
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <Music2 className="hero-icon" />
       </section>
@@ -84,13 +149,15 @@ export function Discover({ app }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
-            spotifyConnected
-              ? 'Busque uma faixa, álbum ou artista...'
-              : 'Conecte o Spotify para buscar no catálogo'
+            activePlatform === 'youtube'
+              ? 'Busque músicas e vídeos no YouTube...'
+              : 'Busque uma faixa, álbum ou artista...'
           }
-          disabled={!spotifyConnected}
+          disabled={!connections[activePlatform]}
         />
-        <button disabled={busy || !spotifyConnected}>Buscar</button>
+        <button disabled={busy || !connections[activePlatform]}>
+          {busy ? 'Buscando...' : 'Buscar'}
+        </button>
       </form>
       <Section title={results.length ? 'Resultados da busca' : 'Em alta no Harmony'}>
         {(results.length ? results : featured).map((track) => (

@@ -101,7 +101,7 @@ export function Community({ app }) {
           onChange={(e) => setContent(e.target.value)}
           placeholder="Compartilhe uma descoberta, um álbum ou uma sensação..."
         />
-        <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} />
+        <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />
         <button className="primary" disabled={publishing}>
           <Send /> Publicar
         </button>

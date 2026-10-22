@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
+import { connectSpotify } from '../lib/spotify'
+import { youtubeApiKey } from '../lib/youtube'
+import { useMusicConnections } from '../hooks/useMusicConnections'
 import { Page } from '../components/Media'
 import { PasswordField } from '../components/PasswordField'
 import { browserDescription, passwordPolicyError, passwordStrength } from '../utils/account'
 
 export function AccountSettings({ app }) {
   const navigate = useNavigate()
+  const { connections, disconnectSpotify, connectYoutube, disconnectYoutube } =
+    useMusicConnections(app.user?.id)
   const [profileForm, setProfileForm] = useState({
     display_name: '',
     username: '',
@@ -28,6 +33,7 @@ export function AccountSettings({ app }) {
   const [busy, setBusy] = useState('')
   const [feedback, setFeedback] = useState({ type: '', text: '' })
   const [showPasswords, setShowPasswords] = useState({})
+  const [musicNotice, setMusicNotice] = useState('')
   const strength = passwordStrength(passwordForm.next)
   const emailProvider = app.user?.app_metadata?.providers?.includes('email')
 
@@ -72,6 +78,28 @@ export function AccountSettings({ app }) {
   const notify = (type, text) => setFeedback({ type, text })
   const togglePassword = (key) =>
     setShowPasswords((current) => ({ ...current, [key]: !current[key] }))
+
+  const toggleMusicPlatform = async (platform) => {
+    setMusicNotice('')
+    try {
+      if (platform === 'spotify') {
+        if (connections.spotify) {
+          disconnectSpotify()
+          setMusicNotice('Spotify foi desvinculado deste navegador.')
+        } else {
+          await connectSpotify()
+        }
+      } else if (connections.youtube) {
+        disconnectYoutube()
+        setMusicNotice('YouTube Music foi desativado neste navegador.')
+      } else {
+        connectYoutube()
+        setMusicNotice('YouTube Music foi ativado neste navegador.')
+      }
+    } catch (error) {
+      setMusicNotice(error.message || 'Não foi possível atualizar a plataforma.')
+    }
+  }
 
   const reauthenticate = async (password) => {
     if (!emailProvider || !app.user?.email) {
@@ -340,6 +368,32 @@ export function AccountSettings({ app }) {
           {feedback.text}
         </p>
       )}
+      <section className="settings-section" aria-labelledby="settings-music-title">
+        <h2 id="settings-music-title">Plataformas de música</h2>
+        <p className="settings-description">Escolha os serviços que podem ser usados para buscar e reproduzir músicas neste navegador. Desconectar remove o vínculo local; para revogar o acesso OAuth do Spotify, remova também o Harmony nas configurações da sua conta Spotify.</p>
+        {musicNotice && <p className="notice" role="status">{musicNotice}</p>}
+        <div className="music-service-list">
+          <article className="music-service">
+            <div>
+              <b>Spotify</b>
+              <span>{connections.spotify ? 'Conectado neste navegador' : 'Não conectado'}</span>
+            </div>
+            <button type="button" className={connections.spotify ? 'secondary' : 'primary'} onClick={() => toggleMusicPlatform('spotify')}>
+              {connections.spotify ? 'Desconectar' : 'Conectar'}
+            </button>
+          </article>
+          <article className="music-service">
+            <div>
+              <b>YouTube Music</b>
+              <span>{connections.youtube ? 'Ativado neste navegador' : 'Não ativado'}</span>
+            </div>
+            <button type="button" className={connections.youtube ? 'secondary' : 'primary'} onClick={() => toggleMusicPlatform('youtube')} disabled={!connections.youtube && !youtubeApiKey()}>
+              {connections.youtube ? 'Desativar' : 'Ativar'}
+            </button>
+          </article>
+        </div>
+        {!youtubeApiKey() && <p className="hint">A busca do YouTube precisa ser configurada pelo administrador do site com VITE_YOUTUBE_API_KEY. Nenhuma conta Google ou assinatura Premium é necessária para usar o player incorporado.</p>}
+      </section>
       <section className="settings-section" aria-labelledby="settings-account-title">
         <h2 id="settings-account-title">Conta</h2>
         <p className="settings-description">Seus dados públicos e preferências do Harmony.</p>

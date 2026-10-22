@@ -67,9 +67,11 @@ export function TrackRow({ track, saved, onToggleSave }) {
           <Heart fill={saved ? 'currentColor' : 'none'} />
         </button>
       )}
-      <button disabled={saving} className="icon spotify" onClick={spotifySave}>
-        <Music2 />
-      </button>
+      {track.platform !== 'youtube' && (
+        <button disabled={saving} className="icon spotify" onClick={spotifySave} aria-label="Salvar no Spotify">
+          <Music2 />
+        </button>
+      )}
     </article>
   )
 }

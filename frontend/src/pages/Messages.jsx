@@ -133,7 +133,7 @@ export function Messages({ app }) {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Digite uma mensagem..."
                 />
-                <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} />
+                <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />
                 <button className="primary">
                   <Send />
                 </button>
