@@ -116,8 +116,9 @@ button {
   margin: 28px 0;
   border-radius: 24px;
   padding: 34px 42px;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
+  z-index: 2;
   background: linear-gradient(125deg, #0d8965, #19c890);
   color: #fff;
 }
@@ -153,6 +154,7 @@ button {
   background: #fff;
   color: #087456;
 }
+.hero-connected { min-height: 0; padding-top: 24px; padding-bottom: 24px; }
 .hero-icon {
   position: absolute;
   width: 230px;

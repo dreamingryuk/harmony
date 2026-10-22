@@ -82,16 +82,20 @@ export function Discover({ app }) {
       title={`Olá, ${(app.profile?.display_name || 'ouvinte').split(' ')[0]}`}
       subtitle="Encontre algo que combine com o seu momento."
     >
-      <section className="hero">
+      <section className={`hero ${connectedPlatforms.length ? 'hero-connected' : ''}`}>
         <div>
-          <span className="eyebrow">
-            <Sparkles /> DESCOBERTA DIÁRIA
-          </span>
-          <h2>O próximo som que vai virar seu favorito.</h2>
-          <p>
-            Conecte uma plataforma de música, importe playlists do Spotify e encontre gente que
-            vibra na mesma frequência.
-          </p>
+          {!connectedPlatforms.length && (
+            <>
+              <span className="eyebrow">
+                <Sparkles /> DESCOBERTA DIÁRIA
+              </span>
+              <h2>O próximo som que vai virar seu favorito.</h2>
+              <p>
+                Conecte uma plataforma de música, importe playlists do Spotify e encontre gente
+                que vibra na mesma frequência.
+              </p>
+            </>
+          )}
           {!connectedPlatforms.length ? (
             <div className="music-connect">
               <button className="primary" onClick={() => setShowPlatformOptions((open) => !open)}>
