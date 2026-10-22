@@ -35,6 +35,14 @@ Defina `PORT` para mudar a porta. `CORS_ORIGIN` aceita uma ou mais origens separ
 2. Em **Authentication > URL Configuration**, permita `http://localhost:5173` e a URL publicada.
 3. Copie a URL do projeto e a chave anon/public para `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
 4. Execute `frontend/supabase/schema.sql` uma vez no SQL Editor.
+5. Execute também `frontend/supabase/profile-playlists-notifications.sql`. Ele adiciona avatars, recibos de leitura e as políticas necessárias.
+
+### Avatares, mensagens lidas e exclusão de conta
+
+- O complemento SQL cria o bucket público `avatars`. As imagens são públicas para poderem aparecer nos perfis, posts e conversas, mas as políticas permitem que cada usuário envie ou apague somente arquivos dentro da sua pasta UUID.
+- Para a exclusão definitiva de conta funcionar, instale a [Supabase CLI](https://supabase.com/docs/guides/cli), autentique-se e, a partir de `frontend/`, execute `supabase functions deploy delete-account`.
+- A função usa a chave de serviço disponível apenas no ambiente Supabase para remover os arquivos do avatar antes de apagar o usuário autenticado. Nunca configure `SUPABASE_SERVICE_ROLE_KEY` em `.env` do frontend ou na Vercel.
+- Após publicar a função, confirme em **Authentication > URL Configuration** que a URL local e a URL Vercel estão em Redirect URLs; isso também permite os links de troca/recuperação de senha.
 
 As políticas RLS do schema protegem as operações no banco. Nunca use a chave `service_role` no frontend.
 

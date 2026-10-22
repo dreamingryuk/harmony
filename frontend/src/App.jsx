@@ -23,7 +23,17 @@ import {
   Users,
   UserRound,
   BarChart3,
+  Bell,
+  Camera,
+  Eye,
+  EyeOff,
+  ListMusic,
   LogOut,
+  Pencil,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  X,
   ExternalLink,
 } from 'lucide-react'
 import { configured, ensureProfile, supabase } from './lib/supabase'
@@ -104,6 +114,31 @@ const fromJson = (track) =>
     genres: track.genres || [],
   }
 const play = (track) => window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+const normalise = (value = '') =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+const isPlaylistAttachment = (attachment) => attachment?.type === 'playlist'
+const attachmentTrack = (attachment) =>
+  attachment?.type === 'track' ? fromJson(attachment.track) : fromJson(attachment)
+const playlistAttachment = (playlist) => ({
+  type: 'playlist',
+  playlist_id: playlist.id,
+  title: playlist.title,
+  description: playlist.description || '',
+  cover_color: playlist.cover_color || 'green',
+  track_count: playlist.playlist_tracks?.length || 0,
+})
+const GENRES = [
+  'Afrobeats', 'Alternativo', 'Ambient', 'Axé', 'Blues', 'Bossa Nova', 'Breakbeat', 'Chillout',
+  'Clássica', 'Country', 'Dance', 'Disco', 'Drum and Bass', 'Dub', 'EDM', 'Eletrônica', 'Emo',
+  'Folk', 'Forró', 'Funk', 'Funk carioca', 'Gospel', 'Grime', 'Heavy Metal', 'Hip Hop', 'House',
+  'Indie', 'Instrumental', 'Jazz', 'K-pop', 'Lo-fi', 'Música latina', 'MPB', 'New Wave', 'Pagode',
+  'Pop', 'Pop punk', 'Post-punk', 'Psicodélico', 'Punk', 'R&B', 'Rap', 'Reggae', 'Reggaeton',
+  'Rock', 'Rock alternativo', 'Rock brasileiro', 'Samba', 'Sertanejo', 'Soul', 'Synthpop', 'Techno',
+  'Trance', 'Trap', 'Vaporwave'
+].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
 function CoverArt({ src, alt = '', className }) {
   return (
@@ -117,6 +152,57 @@ function CoverArt({ src, alt = '', className }) {
       }}
     />
   )
+}
+
+function Avatar({ profile, className = '' }) {
+  if (profile?.avatar_url) {
+    return (
+      <span className={`avatar avatar-image ${className}`}>
+        {initials(profile.display_name)}
+        <img src={profile.avatar_url} alt={`Foto de ${profile.display_name || 'usuário'}`} onError={(event) => event.currentTarget.remove()} />
+      </span>
+    )
+  }
+  return <span className={`avatar ${className}`}>{initials(profile?.display_name)}</span>
+}
+
+function useUnreadMessages(userId) {
+  const [unreadIds, setUnreadIds] = useState(new Set())
+  const [unreadSenders, setUnreadSenders] = useState(new Set())
+  const load = useCallback(async () => {
+    if (!configured || !userId) return
+    const [{ data: received, error: messagesError }, { data: receipts, error: receiptsError }] =
+      await Promise.all([
+        supabase.from('messages').select('id, sender_id').eq('recipient_id', userId),
+        supabase.from('message_reads').select('message_id').eq('user_id', userId),
+      ])
+    // A migration ainda não executada não deve impedir o restante do aplicativo de abrir.
+    if (messagesError || receiptsError) return
+    const readIds = new Set((receipts || []).map((receipt) => receipt.message_id))
+    const unread = (received || []).filter((message) => !readIds.has(message.id))
+    setUnreadIds(new Set(unread.map((message) => message.id)))
+    setUnreadSenders(new Set(unread.map((message) => message.sender_id)))
+  }, [userId])
+  useEffect(() => {
+    load()
+    if (!configured || !userId) return undefined
+    const channel = supabase
+      .channel(`synq-unread-${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        if (
+          payload.new.recipient_id === userId &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          new Notification('Harmony', { body: 'Você recebeu uma nova mensagem.' })
+        }
+        load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reads' }, load)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [load, userId])
+  return { unreadIds, unreadSenders, unreadCount: unreadIds.size, refreshUnread: load }
 }
 
 function useSynq() {
@@ -262,12 +348,17 @@ function Shell({ app, children }) {
             <NavLink end={to === '/'} key={to} to={to}>
               <Icon />
               {label}
+              {to === '/mensagens' && app.unreadCount > 0 && (
+                <span className="nav-badge" aria-label={`${app.unreadCount} mensagens não lidas`}>
+                  {app.unreadCount > 99 ? '99+' : app.unreadCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
         <div className="side-bottom">
           <button className="profile-short" onClick={() => navigate('/perfil')}>
-            <span className="avatar">{initials(app.profile?.display_name)}</span>
+            <Avatar profile={app.profile} />
             {app.profile?.display_name || 'Ouvinte'}
           </button>
           <button className="logout" onClick={logout}>
@@ -293,6 +384,7 @@ function Shell({ app, children }) {
           >
             <Icon />
             <span>{label}</span>
+            {to === '/mensagens' && app.unreadCount > 0 && <i className="nav-dot" />}
           </NavLink>
         ))}
       </nav>
@@ -525,11 +617,73 @@ function Discover({ app }) {
   )
 }
 
+function AttachmentCard({ attachment, onOpenPlaylist, compact = false }) {
+  if (!attachment) return null
+  if (isPlaylistAttachment(attachment)) {
+    return (
+      <button className={`attachment playlist-attachment ${compact ? 'compact' : ''}`} onClick={() => onOpenPlaylist?.(attachment.playlist_id)}>
+        <span className="playlist-art small"><ListMusic /></span>
+        <span><b>{attachment.title}</b><small>Playlist · {attachment.track_count || 0} faixas</small></span>
+        <ExternalLink />
+      </button>
+    )
+  }
+  const track = attachmentTrack(attachment)
+  if (!track) return null
+  return <button className={`attachment track-attachment ${compact ? 'compact' : ''}`} onClick={() => play(track)}><CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} /><span><b>{track.title}</b><small>{track.artists}</small></span><Play fill="currentColor" /></button>
+}
+
+function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = false }) {
+  const [draft, setDraft] = useState({ title: playlist?.title || '', description: playlist?.description || '', is_public: playlist?.is_public || false })
+  const [tracks, setTracks] = useState(playlist?.playlist_tracks || [])
+  const [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
+  const isNew = !playlist?.id
+  const save = async () => {
+    if (!draft.title.trim()) return alert('Dê um nome à playlist.')
+    try {
+      setBusy(true)
+      const data = { title: draft.title.trim(), description: draft.description.trim(), is_public: draft.is_public }
+      const response = isNew ? await supabase.from('playlists').insert({ ...data, owner_id: app.user.id }).select('*, playlist_tracks(*)').single() : await supabase.from('playlists').update(data).eq('id', playlist.id).select('*, playlist_tracks(*)').single()
+      if (response.error) throw response.error
+      onSaved(response.data); onClose()
+    } catch (error) { alert(`Não foi possível salvar: ${error.message}`) } finally { setBusy(false) }
+  }
+  const removePlaylist = async () => {
+    if (!window.confirm(`Excluir “${playlist.title}”? Esta ação não pode ser desfeita.`)) return
+    const { error } = await supabase.from('playlists').delete().eq('id', playlist.id)
+    if (error) return alert(error.message)
+    onSaved(null); onClose()
+  }
+  const search = async (event) => {
+    event.preventDefault(); if (!query.trim()) return
+    try { setBusy(true); setResults(await searchTracks(query.trim())) } catch (error) { alert(error.message) } finally { setBusy(false) }
+  }
+  const addTrack = async (track) => {
+    if (isNew) return alert('Salve a playlist antes de adicionar faixas.')
+    const { data, error } = await supabase.from('playlist_tracks').insert({ playlist_id: playlist.id, spotify_id: track.spotifyId, position: tracks.length, track: trackJson(track) }).select().single()
+    if (error) return alert(error.message.includes('unique') ? 'Essa faixa já está na playlist.' : error.message)
+    setTracks((items) => [...items, data]); setResults([]); setQuery('')
+  }
+  const removeTrack = async (id) => {
+    const { error } = await supabase.from('playlist_tracks').delete().eq('id', id)
+    if (error) return alert(error.message)
+    setTracks((items) => items.filter((item) => item.id !== id))
+  }
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal playlist-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+    <header><div><span className="eyebrow"><ListMusic /> PLAYLIST</span><h2>{readOnly ? playlist.title : isNew ? 'Nova playlist' : 'Editar playlist'}</h2></div><button className="icon" aria-label="Fechar" onClick={onClose}><X /></button></header>
+    {readOnly ? <><p className="playlist-description">{playlist.description || 'Sem descrição.'}</p><p className="playlist-status"><Eye /> Playlist pública</p></> : <div className="editor-fields"><label>Nome<input value={draft.title} maxLength="100" onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label><label>Descrição<textarea value={draft.description} maxLength="500" onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label><label className="toggle"><input type="checkbox" checked={draft.is_public} onChange={(event) => setDraft({ ...draft, is_public: event.target.checked })} /> <span>Playlist pública</span></label>{playlist?.imported_spotify_id && <p className="hint">Esta é uma cópia importada. Alterações não são enviadas ao Spotify.</p>}</div>}
+    <div className="modal-tracks"><h3>Faixas ({tracks.length})</h3>{tracks.length ? tracks.map((item) => { const track = fromJson(item.track); return <div className="modal-track" key={item.id}><button onClick={() => play(track)}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span></button>{!readOnly && <button className="icon danger" aria-label="Remover faixa" onClick={() => removeTrack(item.id)}><Trash2 /></button>}</div> }) : <p className="hint">Nenhuma faixa adicionada ainda.</p>}</div>
+    {!readOnly && !isNew && <><form className="inline-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar faixa no Spotify" /><button className="secondary" disabled={busy}>Buscar</button></form>{results.map((track) => <button className="search-result" key={track.spotifyId} onClick={() => addTrack(track)}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}</>}
+    {!readOnly && <footer className="modal-actions">{!isNew && <button className="danger-button" onClick={removePlaylist}><Trash2 /> Excluir</button>}<span /><button className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={busy} onClick={save}>Salvar</button></footer>}
+  </section></div>
+}
+
 function Library({ app }) {
   const [playlists, setPlaylists] = useState([]),
     [saved, setSaved] = useState([]),
     [imports, setImports] = useState([]),
-    [loading, setLoading] = useState(false)
+    [loading, setLoading] = useState(false),
+    [editor, setEditor] = useState(null)
   const load = useCallback(async () => {
     if (!configured) return
     const [p, s] = await Promise.all([
@@ -604,16 +758,7 @@ function Library({ app }) {
   return (
     <Page title="Sua Biblioteca" subtitle="Suas músicas e coleções, do seu jeito.">
       <div className="page-actions">
-        <button
-          className="primary"
-          onClick={async () => {
-            const name = prompt('Nome da nova playlist:')
-            if (name && configured) {
-              await supabase.from('playlists').insert({ owner_id: app.user.id, title: name })
-              load()
-            }
-          }}
-        >
+        <button className="primary" onClick={() => setEditor({})}>
           <Plus /> Nova playlist
         </button>
         <button className="secondary" onClick={importList} disabled={loading}>
@@ -648,31 +793,48 @@ function Library({ app }) {
       <Section title="Suas playlists">
         <div className="playlist-grid">
           {playlists.map((item) => (
-            <article className="playlist-card" key={item.id}>
+            <button className="playlist-card" key={item.id} onClick={() => setEditor(item)}>
               <div className="playlist-art">
                 <Music2 />
               </div>
               <b>{item.title}</b>
-              <span>{item.playlist_tracks?.length || 0} faixas</span>
-            </article>
+              <span>{item.playlist_tracks?.length || 0} faixas · {item.is_public ? 'Pública' : 'Privada'}</span>
+              <i><Pencil /> Editar</i>
+            </button>
           ))}
           {!playlists.length && <Empty text="Crie uma playlist ou importe uma do Spotify." />}
         </div>
       </Section>
+      {editor && <PlaylistDialog playlist={editor.id ? editor : null} app={app} onClose={() => setEditor(null)} onSaved={load} />}
     </Page>
   )
+}
+
+function SharePicker({ playlists = [], attachment, onChange }) {
+  const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
+  const search = async (event) => {
+    event.preventDefault(); if (!query.trim()) return
+    try { setBusy(true); setResults(await searchTracks(query.trim())) } catch (error) { alert(error.message) } finally { setBusy(false) }
+  }
+  return <div className="share-picker">
+    {attachment ? <div className="attached"><AttachmentCard attachment={attachment} compact /><button className="icon" aria-label="Remover anexo" onClick={() => onChange(null)}><X /></button></div> : <button type="button" className="secondary small-button" onClick={() => setOpen(!open)}><Plus /> Música ou playlist</button>}
+    {open && !attachment && <div className="share-menu"><form className="inline-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar música no Spotify" /><button className="secondary" disabled={busy}>Buscar</button></form>{results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}<b className="picker-label">Suas playlists públicas</b>{playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}</div>}
+  </div>
 }
 
 function Community({ app }) {
   const [posts, setPosts] = useState([]),
     [content, setContent] = useState(''),
     [error, setError] = useState(''),
-    [publishing, setPublishing] = useState(false)
+    [publishing, setPublishing] = useState(false),
+    [attachment, setAttachment] = useState(null),
+    [playlists, setPlaylists] = useState([]),
+    [openedPlaylist, setOpenedPlaylist] = useState(null)
   const load = useCallback(async () => {
     if (!configured) return
     const { data, error: queryError } = await supabase
       .from('posts')
-      .select('*, author:profiles!posts_author_id_fkey(display_name), post_likes(user_id)')
+      .select('*, author:profiles!posts_author_id_fkey(display_name, avatar_url), post_likes(user_id)')
       .order('created_at', { ascending: false })
     if (queryError) {
       setError(`Não foi possível carregar o feed: ${queryError.message}`)
@@ -691,17 +853,21 @@ function Community({ app }) {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [load])
+  useEffect(() => {
+    if (!configured) return
+    supabase.from('playlists').select('*, playlist_tracks(*)').eq('owner_id', app.user.id).eq('is_public', true).then(({ data }) => setPlaylists(data || []))
+  }, [app.user.id])
   const publish = async (event) => {
     event.preventDefault()
-    if (!content.trim()) return
+    if (!content.trim() && !attachment) return
     if (!configured) return setError('Configure o Supabase para publicar na comunidade.')
     try {
       setPublishing(true)
       const { error: insertError } = await supabase
         .from('posts')
-        .insert({ author_id: app.user.id, content: content.trim() })
+        .insert({ author_id: app.user.id, content: content.trim(), track: attachment })
       if (insertError) throw insertError
-      setContent('')
+      setContent(''); setAttachment(null)
       await load()
     } catch (publishError) {
       setError(`Não foi possível publicar: ${publishError.message}`)
@@ -725,15 +891,22 @@ function Community({ app }) {
       setError(`Não foi possível atualizar a curtida: ${likeError.message}`)
     }
   }
+  const openPlaylist = async (id) => {
+    if (!id) return
+    const { data, error: playlistError } = await supabase.from('playlists').select('*, playlist_tracks(*)').eq('id', id).maybeSingle()
+    if (playlistError || !data) return setError('Esta playlist não está mais pública ou foi removida.')
+    setOpenedPlaylist(data)
+  }
   return (
     <Page title="Comunidade" subtitle="O que está tocando na cabeça de todo mundo?">
       <form className="composer" onSubmit={publish}>
-        <span className="avatar">{initials(app.profile?.display_name)}</span>
+        <Avatar profile={app.profile} />
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Compartilhe uma descoberta, um álbum ou uma sensação..."
         />
+        <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} />
         <button className="primary" disabled={publishing}>
           <Send /> Publicar
         </button>
@@ -747,11 +920,12 @@ function Community({ app }) {
         {posts.length ? (
           posts.map((post) => (
             <article className="post" key={post.id}>
-              <span className="avatar">{initials(post.author?.display_name)}</span>
+              <Avatar profile={post.author} />
               <div>
                 <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
                 <small>{new Date(post.created_at).toLocaleString('pt-BR')}</small>
                 <p>{post.content}</p>
+                {post.track && <AttachmentCard attachment={post.track} onOpenPlaylist={openPlaylist} />}
                 <button
                   className={`like ${post.post_likes?.some((x) => x.user_id === app.user.id) ? 'liked' : ''}`}
                   onClick={() => like(post)}
@@ -772,15 +946,22 @@ function Community({ app }) {
           <Empty text="Ainda não há posts. Seja a primeira voz da comunidade." />
         )}
       </Section>
+      {openedPlaylist && <PlaylistDialog playlist={openedPlaylist} app={app} readOnly onClose={() => setOpenedPlaylist(null)} onSaved={() => {}} />}
     </Page>
   )
 }
 
 function Messages({ app }) {
+  const userId = app.user.id
+  const refreshUnread = app.refreshUnread
   const [profiles, setProfiles] = useState([]),
     [selected, setSelected] = useState(null),
     [messages, setMessages] = useState([]),
-    [text, setText] = useState('')
+    [text, setText] = useState(''),
+    [attachment, setAttachment] = useState(null),
+    [playlists, setPlaylists] = useState([]),
+    [notice, setNotice] = useState(''),
+    [openedPlaylist, setOpenedPlaylist] = useState(null)
   useEffect(() => {
     if (configured)
       supabase
@@ -789,6 +970,10 @@ function Messages({ app }) {
         .neq('id', app.user.id)
         .then(({ data }) => setProfiles(data || []))
   }, [app.user])
+  useEffect(() => {
+    if (!configured) return
+    supabase.from('playlists').select('*, playlist_tracks(*)').eq('owner_id', app.user.id).eq('is_public', true).then(({ data }) => setPlaylists(data || []))
+  }, [app.user.id])
   const load = useCallback(async () => {
     if (!configured || !selected) return
     const { data } = await supabase
@@ -809,19 +994,40 @@ function Messages({ app }) {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [load])
+  useEffect(() => {
+    if (!configured || !selected || !messages.length) return
+    const unread = messages.filter((message) => message.recipient_id === userId)
+    if (!unread.length) return
+    supabase.from('message_reads').upsert(unread.map((message) => ({ message_id: message.id, user_id: userId })), { onConflict: 'message_id,user_id', ignoreDuplicates: true }).then(({ error }) => {
+      if (error) setNotice('Execute a migration de notificações no Supabase para marcar mensagens como lidas.')
+      else refreshUnread()
+    })
+  }, [messages, refreshUnread, selected, userId])
   const send = async (event) => {
     event.preventDefault()
-    if (!text.trim() || !selected) return
-    await supabase.from('messages').insert({
+    if ((!text.trim() && !attachment) || !selected) return
+    const { error } = await supabase.from('messages').insert({
       sender_id: app.user.id,
       recipient_id: selected.id,
       content: text.trim(),
+      track: attachment,
     })
-    setText('')
-    load()
+    if (error) return setNotice(`Não foi possível enviar: ${error.message}`)
+    setText(''); setAttachment(null); load()
+  }
+  const requestNotifications = async () => {
+    if (!('Notification' in window)) return setNotice('Este navegador não suporta notificações.')
+    const result = await Notification.requestPermission()
+    setNotice(result === 'granted' ? 'Notificações ativadas.' : 'As notificações continuam desativadas no navegador.')
+  }
+  const openPlaylist = async (id) => {
+    const { data, error } = await supabase.from('playlists').select('*, playlist_tracks(*)').eq('id', id).maybeSingle()
+    if (error || !data) return setNotice('Esta playlist não está mais pública ou foi removida.')
+    setOpenedPlaylist(data)
   }
   return (
     <Page title="Mensagens" subtitle="Converse sobre o que está te fazendo ouvir no repeat.">
+      <div className="message-tools"><button className="secondary small-button" onClick={requestNotifications}><Bell /> Ativar notificações</button>{notice && <span className="hint">{notice}</span>}</div>
       <div className="messages">
         <aside>
           {profiles.length ? (
@@ -831,8 +1037,8 @@ function Messages({ app }) {
                 className={selected?.id === profile.id ? 'active' : ''}
                 key={profile.id}
               >
-                <span className="avatar">{initials(profile.display_name)}</span>
-                {profile.display_name}
+                <Avatar profile={profile} />
+                <span>{profile.display_name}{app.unreadSenders?.has(profile.id) && <i className="unread-dot" />}</span>
               </button>
             ))
           ) : (
@@ -843,15 +1049,11 @@ function Messages({ app }) {
           {selected ? (
             <>
               <header>
-                <span className="avatar">{initials(selected.display_name)}</span>
+                <Avatar profile={selected} />
                 <b>{selected.display_name}</b>
               </header>
               <div className="chat">
-                {messages.map((message) => (
-                  <p className={message.sender_id === app.user.id ? 'mine' : ''} key={message.id}>
-                    {message.content}
-                  </p>
-                ))}
+                {messages.map((message) => <div className={`message-bubble ${message.sender_id === app.user.id ? 'mine' : ''}`} key={message.id}>{message.content && <p>{message.content}</p>}{message.track && <AttachmentCard attachment={message.track} compact onOpenPlaylist={openPlaylist} />}</div>)}
               </div>
               <form onSubmit={send}>
                 <input
@@ -859,6 +1061,7 @@ function Messages({ app }) {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Digite uma mensagem..."
                 />
+                <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} />
                 <button className="primary">
                   <Send />
                 </button>
@@ -869,6 +1072,7 @@ function Messages({ app }) {
           )}
         </section>
       </div>
+      {openedPlaylist && <PlaylistDialog playlist={openedPlaylist} app={app} readOnly onClose={() => setOpenedPlaylist(null)} onSaved={() => {}} />}
     </Page>
   )
 }
@@ -988,74 +1192,86 @@ function Retrospective({ app }) {
 }
 
 function Profile({ app }) {
-  const [form, setForm] = useState({
-    display_name: '',
-    bio: '',
-    favorite_genres: '',
-  })
-  useEffect(
-    () =>
-      setForm({
-        display_name: app.profile?.display_name || '',
-        bio: app.profile?.bio || '',
-        favorite_genres: (app.profile?.favorite_genres || []).join(', '),
-      }),
-    [app.profile]
-  )
+  const [form, setForm] = useState({ display_name: '', bio: '', favorite_genres: [] })
+  const [genreQuery, setGenreQuery] = useState(''), [genresOpen, setGenresOpen] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false), [settingsOpen, setSettingsOpen] = useState(false)
+  const [account, setAccount] = useState({ email: '', password: '', passwordConfirmation: '', deletion: '' })
+  const [notice, setNotice] = useState('')
+  useEffect(() => {
+    setForm({ display_name: app.profile?.display_name || '', bio: app.profile?.bio || '', favorite_genres: app.profile?.favorite_genres || [] })
+    setAccount((current) => ({ ...current, email: app.user?.email || '' }))
+  }, [app.profile, app.user?.email])
   const save = async (event) => {
     event.preventDefault()
-    if (!configured) return alert('Configure o Supabase para salvar seu perfil.')
-    if (!form.display_name.trim()) return alert('Informe um nome de exibição.')
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        display_name: form.display_name,
-        bio: form.bio,
-        favorite_genres: form.favorite_genres
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean),
-      })
-      .eq('id', app.user.id)
-    if (error) alert(error.message)
-    else {
-      await app.refreshProfile(app.user)
-      alert('Perfil salvo!')
-    }
+    if (!configured) return setNotice('Configure o Supabase para salvar seu perfil.')
+    if (!form.display_name.trim()) return setNotice('Informe um nome de exibição.')
+    const { error } = await supabase.from('profiles').update({ display_name: form.display_name.trim(), bio: form.bio.trim(), favorite_genres: form.favorite_genres }).eq('id', app.user.id)
+    if (error) setNotice(error.message)
+    else { await app.refreshProfile(app.user); setNotice('Perfil salvo com sucesso.') }
   }
-  return (
-    <Page title="Seu Perfil" subtitle="Faça seu perfil soar como você.">
-      <div className="profile-hero">
-        <span className="avatar big">{initials(app.profile?.display_name)}</span>
-        <div>
-          <h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2>
-          <p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p>
-        </div>
-      </div>
-      <form className="profile-form" onSubmit={save}>
-        <label>
-          Nome de exibição
-          <input
-            value={form.display_name}
-            onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-          />
-        </label>
-        <label>
-          Bio
-          <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
-        </label>
-        <label>
-          Gêneros favoritos
-          <input
-            value={form.favorite_genres}
-            onChange={(e) => setForm({ ...form, favorite_genres: e.target.value })}
-            placeholder="Pop, Rock, MPB..."
-          />
-        </label>
-        <button className="primary">Salvar alterações</button>
-      </form>
-    </Page>
-  )
+  const toggleGenre = (genre) => setForm((current) => ({ ...current, favorite_genres: current.favorite_genres.includes(genre) ? current.favorite_genres.filter((item) => item !== genre) : [...current.favorite_genres, genre] }))
+  const uploadAvatar = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!configured) return setNotice('Configure o Supabase para enviar uma foto de perfil.')
+    const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+    if (!extensions[file.type] || file.size > 5 * 1024 * 1024) return setNotice('Escolha uma imagem JPG, PNG ou WebP de até 5 MB.')
+    try {
+      setAvatarBusy(true)
+      const path = `${app.user.id}/avatar-${Date.now()}.${extensions[file.type]}`
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type })
+      if (uploadError) throw uploadError
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      const { error: profileError } = await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', app.user.id)
+      if (profileError) { await supabase.storage.from('avatars').remove([path]); throw profileError }
+      const oldPath = app.profile?.avatar_url?.split('/avatars/')[1]
+      if (oldPath?.startsWith(`${app.user.id}/`)) await supabase.storage.from('avatars').remove([oldPath])
+      await app.refreshProfile(app.user); setNotice('Foto de perfil atualizada.')
+    } catch (error) { setNotice(`Não foi possível enviar a foto: ${error.message}`) } finally { setAvatarBusy(false) }
+  }
+  const updateEmail = async (event) => {
+    event.preventDefault()
+    if (!configured) return setNotice('Configure o Supabase para alterar o e-mail.')
+    if (!account.email.trim() || account.email.trim() === app.user.email) return setNotice('Digite um novo e-mail para alterá-lo.')
+    const { error } = await supabase.auth.updateUser({ email: account.email.trim() }, { emailRedirectTo: `${window.location.origin}/perfil` })
+    setNotice(error ? error.message : 'Confira os e-mails de confirmação para concluir a alteração.')
+  }
+  const updatePassword = async (event) => {
+    event.preventDefault()
+    if (!configured) return setNotice('Configure o Supabase para alterar a senha.')
+    if (account.password.length < 8) return setNotice('A nova senha deve ter pelo menos 8 caracteres.')
+    if (account.password !== account.passwordConfirmation) return setNotice('A confirmação da senha não confere.')
+    const { error } = await supabase.auth.updateUser({ password: account.password })
+    setNotice(error ? error.message : 'Senha atualizada com sucesso.')
+    if (!error) setAccount((current) => ({ ...current, password: '', passwordConfirmation: '' }))
+  }
+  const sendRecovery = async () => {
+    if (!configured) return setNotice('Configure o Supabase para recuperar a senha.')
+    const { error } = await supabase.auth.resetPasswordForEmail(app.user.email, { redirectTo: `${window.location.origin}/perfil` })
+    setNotice(error ? error.message : 'Se o e-mail estiver configurado, enviamos um link de recuperação.')
+  }
+  const deleteAccount = async () => {
+    if (!configured) return setNotice('Configure o Supabase para excluir a conta.')
+    if (account.deletion !== 'EXCLUIR') return setNotice('Digite EXCLUIR para confirmar a exclusão definitiva.')
+    if (!window.confirm('Última confirmação: deseja apagar sua conta e todos os seus dados?')) return
+    const { error } = await supabase.functions.invoke('delete-account', { body: { confirmation: 'EXCLUIR' } })
+    if (error) return setNotice(`Não foi possível excluir: ${error.message}. Confirme se a Edge Function foi publicada.`)
+    await supabase.auth.signOut()
+  }
+  const filteredGenres = GENRES.filter((genre) => normalise(genre).includes(normalise(genreQuery)))
+  return <Page title="Seu Perfil" subtitle="Faça seu perfil soar como você.">
+    <div className="profile-hero"><div className="avatar-editor"><Avatar profile={app.profile} className="big" /><label className="avatar-upload"><Camera /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={avatarBusy} /></label></div><div><h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2><p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p></div></div>
+    {notice && <p className="notice profile-notice" role="status">{notice}</p>}
+    <form className="profile-form" onSubmit={save}>
+      <label>Nome de exibição<input value={form.display_name} maxLength="80" onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>
+      <label>Bio<textarea value={form.bio} maxLength="300" onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
+      <label>Gêneros favoritos</label>
+      <div className="genre-picker"><div className="genre-input"><Search /><input value={genreQuery} onFocus={() => setGenresOpen(true)} onChange={(event) => { setGenreQuery(event.target.value); setGenresOpen(true) }} placeholder="Busque um gênero musical" /><button type="button" className="icon" aria-label="Abrir gêneros" onClick={() => setGenresOpen(!genresOpen)}>{genresOpen ? <EyeOff /> : <Eye />}</button></div>{form.favorite_genres.length > 0 && <div className="genre-chips">{form.favorite_genres.map((genre) => <button type="button" key={genre} onClick={() => toggleGenre(genre)}>{genre} <X /></button>)}</div>}{genresOpen && <div className="genre-options">{filteredGenres.length ? filteredGenres.map((genre) => <button type="button" className={form.favorite_genres.includes(genre) ? 'selected' : ''} key={genre} onClick={() => toggleGenre(genre)}>{form.favorite_genres.includes(genre) ? '✓ ' : ''}{genre}</button>) : <p>Nenhum gênero encontrado.</p>}</div>}</div>
+      <button className="primary">Salvar alterações</button>
+    </form>
+    <section className="account-settings"><header><div><h2><Settings /> Configurações da conta</h2><p>Gerencie seu acesso e dados de segurança.</p></div><button className="secondary" onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? 'Fechar' : 'Abrir'}</button></header>{settingsOpen && <div className="settings-grid"><form onSubmit={updateEmail}><h3>Alterar e-mail</h3><p>E-mail atual: <b>{app.user?.email}</b></p><input type="email" value={account.email} onChange={(event) => setAccount({ ...account, email: event.target.value })} /><button className="secondary">Solicitar alteração</button></form><form onSubmit={updatePassword}><h3>Alterar senha</h3><input type="password" minLength="8" value={account.password} placeholder="Nova senha" onChange={(event) => setAccount({ ...account, password: event.target.value })} /><input type="password" minLength="8" value={account.passwordConfirmation} placeholder="Confirmar nova senha" onChange={(event) => setAccount({ ...account, passwordConfirmation: event.target.value })} /><button className="secondary">Salvar nova senha</button><button type="button" className="text-button" onClick={sendRecovery}>Enviar link de recuperação</button></form><form className="danger-zone" onSubmit={(event) => { event.preventDefault(); deleteAccount() }}><h3><ShieldCheck /> Excluir conta</h3><p>Isso remove permanentemente seus dados, mensagens, playlists e avatar.</p><input value={account.deletion} placeholder="Digite EXCLUIR" onChange={(event) => setAccount({ ...account, deletion: event.target.value })} /><button className="danger-button">Excluir definitivamente</button></form></div>}</section>
+  </Page>
 }
 function SpotifyCallback() {
   const navigate = useNavigate(),
@@ -1078,7 +1294,9 @@ function SpotifyCallback() {
   )
 }
 function AppRoutes() {
-  const app = useSynq()
+  const baseApp = useSynq()
+  const unread = useUnreadMessages(baseApp.user?.id)
+  const app = { ...baseApp, ...unread }
   if (!app.ready) return <main className="callback">Carregando Harmony...</main>
   if (configured && !app.user) return <Auth />
   return (
