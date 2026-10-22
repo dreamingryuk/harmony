@@ -384,6 +384,7 @@ button {
   padding: 16px;
   border-radius: 14px;
   margin-top: 8px;
+  min-width: 0;
 }
 .post div {
   min-width: 0;
@@ -397,6 +398,9 @@ button {
 .post p {
   line-height: 1.5;
   margin: 11px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .like {
   border: 0;
@@ -456,7 +460,7 @@ button {
   padding: 17px;
   background: #fbfdfc;
 }
-.chat p {
+.chat .message-bubble {
   max-width: 72%;
   width: max-content;
   background: #e9f1ed;
@@ -464,8 +468,113 @@ button {
   border-radius: 12px;
   margin: 8px 0;
   line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.chat p.mine {
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #ef4444;
+}
+.embed-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 37 31 / 62%);
+}
+.spotify-embed-panel,
+.music-picker {
+  position: relative;
+  width: min(100%, 480px);
+  border-radius: 16px;
+  background: #fff;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+.spotify-embed-panel p {
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+.spotify-embed-panel iframe {
+  width: 100%;
+  height: 152px;
+  border: 0;
+  border-radius: 12px;
+}
+.close-embed {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 1;
+}
+.music-picker h2,
+.music-picker h3 {
+  margin: 0 0 14px;
+}
+.music-picker h3 {
+  font-size: 15px;
+  margin-top: 20px;
+}
+.picker-row,
+.shared-music {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  margin-top: 8px;
+}
+.picker-row:hover {
+  background: #f4fbf8;
+}
+.picker-row img,
+.shared-music img {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+.picker-row span:not(.playlist-icon),
+.shared-music div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.picker-row small,
+.shared-music span {
+  color: var(--muted);
+}
+.playlist-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  border-radius: 7px;
+  background: var(--green);
+}
+.shared-music {
+  width: auto;
+  max-width: 100%;
+  margin: 8px 0;
+}
+.shared-music a {
+  color: var(--green);
+}
+.conversation .shared-music {
+  margin: 0 12px 10px;
+}
+.chat .message-bubble.mine {
   margin-left: auto;
   background: #d5f6e8;
 }
