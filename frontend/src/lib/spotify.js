@@ -8,7 +8,11 @@ const KEYS = {
 }
 const SCOPES = ['playlist-read-private', 'playlist-read-collaborative', 'user-library-modify']
 
-const redirectUri = () => `${window.location.origin}/spotify/callback`
+export const FALLBACK_COVER =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%2314b881'/%3E%3Cstop offset='1' stop-color='%2310251f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='160' height='160' rx='18' fill='url(%23g)'/%3E%3Cpath d='M98 37v65.5a20 20 0 1 1-10-17.3V52l35-8v48.5a20 20 0 1 1-10-17.3V37z' fill='white' fill-opacity='.92'/%3E%3C/svg%3E"
+
+const redirectUri = () =>
+  import.meta.env.VITE_SPOTIFY_REDIRECT_URI?.trim() || `${window.location.origin}/spotify/callback`
 const base64Url = (bytes) =>
   btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
@@ -57,7 +61,8 @@ export async function connectSpotify() {
 }
 
 export async function finishSpotifyConnection(code, state) {
-  if (!code || state !== sessionStorage.getItem(KEYS.state))
+  const verifier = sessionStorage.getItem(KEYS.verifier)
+  if (!code || !verifier || state !== sessionStorage.getItem(KEYS.state))
     throw new Error('Não foi possível validar a conexão com Spotify.')
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID
   const body = new URLSearchParams({
@@ -65,7 +70,7 @@ export async function finishSpotifyConnection(code, state) {
     grant_type: 'authorization_code',
     code,
     redirect_uri: redirectUri(),
-    code_verifier: sessionStorage.getItem(KEYS.verifier),
+    code_verifier: verifier,
   })
   const response = await fetch(TOKEN, {
     method: 'POST',
@@ -117,7 +122,7 @@ export function toTrack(track) {
     title: track.name,
     artists: track.artists?.map((artist) => artist.name).join(', ') || 'Artista desconhecido',
     album: track.album?.name || '',
-    coverUrl: track.album?.images?.[0]?.url || '',
+    coverUrl: track.album?.images?.find((image) => image?.url)?.url || FALLBACK_COVER,
     previewUrl: track.preview_url || '',
     spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
     genres: track.genres || [],

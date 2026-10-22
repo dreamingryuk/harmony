@@ -43,6 +43,7 @@ As políticas RLS do schema protegem as operações no banco. Nunca use a chave 
 1. Crie um app no [Spotify for Developers](https://developer.spotify.com/dashboard).
 2. Cadastre `http://localhost:5173/spotify/callback` como Redirect URI e também a URL de produção equivalente.
 3. Coloque somente o Client ID em `VITE_SPOTIFY_CLIENT_ID`. O Client Secret não deve ser usado no navegador.
+4. Defina `VITE_SPOTIFY_REDIRECT_URI` com a mesma URL cadastrada no Dashboard do Spotify. Em produção, use a URL final da Vercel; o endereço deve coincidir exatamente, inclusive sem/ com barra final.
 
 A conexão usa OAuth PKCE. O token fica em `sessionStorage` e a aplicação não baixa nem hospeda áudio do Spotify. As prévias podem não estar disponíveis para todas as faixas.
 

@@ -355,6 +355,15 @@ button {
   min-height: 60px;
   outline: 0;
 }
+.form-error {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #f5b7b7;
+  border-radius: 10px;
+  background: #fff2f2;
+  color: #a12626;
+  font-size: 13px;
+}
 .avatar {
   flex: 0 0 auto;
   width: 34px;
