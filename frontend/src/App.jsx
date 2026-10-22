@@ -1063,6 +1063,7 @@ function Messages({ app }) {
     [playlists, setPlaylists] = useState([]),
     [notice, setNotice] = useState(''),
     [openedPlaylist, setOpenedPlaylist] = useState(null)
+  const chatRef = useRef(null)
   useEffect(() => {
     if (configured)
       supabase
@@ -1109,6 +1110,10 @@ function Messages({ app }) {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [load])
+  useEffect(() => {
+    const chat = chatRef.current
+    if (chat) chat.scrollTop = chat.scrollHeight
+  }, [messages])
   useEffect(() => {
     if (!configured || !selected || !messages.length) return
     const unread = messages.filter((message) => message.recipient_id === userId)
@@ -1167,7 +1172,7 @@ function Messages({ app }) {
                 <Avatar profile={selected} />
                 <b>{selected.display_name}</b>
               </header>
-              <div className="chat">
+              <div className="chat" ref={chatRef}>
                 {messages.map((message) => <div className={`message-bubble ${message.sender_id === app.user.id ? 'mine' : ''}`} key={message.id}>{message.content && <p>{message.content}</p>}{message.track && <AttachmentCard attachment={message.track} compact onOpenPlaylist={openPlaylist} />}</div>)}
               </div>
               <form onSubmit={send}>

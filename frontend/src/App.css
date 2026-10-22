@@ -413,6 +413,7 @@ button {
   height: 570px;
   display: grid;
   grid-template-columns: 260px 1fr;
+  grid-template-rows: minmax(0, 1fr);
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 15px;
@@ -442,6 +443,8 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .conversation header {
   padding: 14px;
@@ -452,7 +455,9 @@ button {
 }
 .chat {
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 17px;
   background: #fbfdfc;
 }
@@ -954,6 +959,7 @@ button {
   }
   .messages {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     height: 590px;
   }
   .messages aside {

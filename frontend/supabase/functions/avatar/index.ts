@@ -163,6 +163,11 @@ Deno.serve(async (request) => {
     })
   if (uploadError) {
     console.error('Could not save the processed avatar:', uploadError.message)
+    if (uploadError.message.toLowerCase().includes('bucket not found')) {
+      return jsonResponse({
+        error: 'O armazenamento de fotos não está configurado. Execute supabase/profile-playlists-notifications.sql no SQL Editor do Supabase.',
+      }, 503)
+    }
     return jsonResponse({ error: 'Não foi possível salvar a foto. Tente novamente.' }, 500)
   }
 

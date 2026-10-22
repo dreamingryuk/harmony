@@ -13,7 +13,7 @@ O frontend acessa Supabase diretamente. O diretório `backend/` na raiz contém 
 - `saved_tracks`, `playlists` e `playlist_tracks`: biblioteca e playlists do Harmony.
 - `listening_events`: reproduções iniciadas no player Harmony. A retrospectiva usa esses eventos; ela não lê o histórico privado completo do Spotify.
 
-O schema e as políticas Row Level Security estão em `supabase/schema.sql`. Execute-o uma vez em um projeto novo do Supabase; depois, aplique os complementos `supabase/profile-playlists-notifications.sql`, `supabase/profile-genres.sql` e `supabase/account-settings.sql` para habilitar as políticas adicionais, validar gêneros e preferências de conta no banco. As funções `avatar`, `cancel-email-change` e `delete-account` devem ser publicadas com `supabase functions deploy <nome>`.
+O schema e as políticas Row Level Security estão em `supabase/schema.sql`. Execute-o uma vez em um projeto novo do Supabase; depois, aplique os complementos `supabase/profile-playlists-notifications.sql`, `supabase/profile-genres.sql` e `supabase/account-settings.sql` para habilitar as políticas adicionais, validar gêneros e preferências de conta no banco. O complemento `profile-playlists-notifications.sql` também cria o bucket público `avatars` (com upload limitado à pasta do usuário) e adiciona `profiles.avatar_url`. Ele é obrigatório para que o envio de fotos e os avatares da comunidade funcionem em um banco existente. Se aparecer `Bucket not found` ou `profiles_1.avatar_url does not exist`, execute esse arquivo inteiro pelo SQL Editor do Supabase; não é necessário recriar nem apagar dados. As funções `avatar`, `cancel-email-change` e `delete-account` devem ser publicadas com `supabase functions deploy <nome>`.
 
 ## Configuração e segurança
 

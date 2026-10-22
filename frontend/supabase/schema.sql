@@ -5,7 +5,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique not null,
   display_name text not null,
-  bio text default '', avatar_color text default 'green',
+  bio text default '', avatar_color text default 'green', avatar_url text,
   favorite_genres text[] default '{}', favorite_artists text[] default '{}',
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
