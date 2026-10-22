@@ -27,6 +27,7 @@ import {
   Camera,
   ChevronDown,
   Eye,
+  EyeOff,
   ListMusic,
   LogOut,
   Pencil,
@@ -36,7 +37,7 @@ import {
   X,
   ExternalLink,
 } from 'lucide-react'
-import { configured, ensureProfile, supabase } from './lib/supabase'
+import { configured, ensureProfile, getAccountPreferences, supabase } from './lib/supabase'
 import { GENRES, highlightGenreMatch, normalizeGenre } from './lib/genres'
 import {
   connectSpotify,
@@ -82,6 +83,7 @@ const nav = [
   ['/mensagens', 'Mensagens', MessageCircle],
   ['/retrospectiva', 'Retrospectiva', BarChart3],
   ['/perfil', 'Perfil', UserRound],
+  ['/configuracoes', 'Configurações', Settings],
 ]
 const demoUser = { id: 'demo-user', email: 'demo@synq.app' }
 const initials = (name = 'S') =>
@@ -152,7 +154,7 @@ function Avatar({ profile, className = '' }) {
   return <span className={`avatar ${className}`}>{initials(profile?.display_name)}</span>
 }
 
-function useUnreadMessages(userId) {
+function useUnreadMessages(userId, notificationsEnabled) {
   const [unreadIds, setUnreadIds] = useState(new Set())
   const [unreadSenders, setUnreadSenders] = useState(new Set())
   const load = useCallback(async () => {
@@ -176,6 +178,7 @@ function useUnreadMessages(userId) {
       .channel(`synq-unread-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         if (
+          notificationsEnabled &&
           payload.new.recipient_id === userId &&
           'Notification' in window &&
           Notification.permission === 'granted'
@@ -187,13 +190,15 @@ function useUnreadMessages(userId) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reads' }, load)
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [load, userId])
+  }, [load, notificationsEnabled, userId])
   return { unreadIds, unreadSenders, unreadCount: unreadIds.size, refreshUnread: load }
 }
 
 function useSynq() {
   const [user, setUser] = useState(null),
     [profile, setProfile] = useState(null),
+    [preferences, setPreferences] = useState(null),
+    [passwordRecovery, setPasswordRecovery] = useState(false),
     [ready, setReady] = useState(!configured)
   const refreshProfile = useCallback(async (authUser) => {
     if (!configured)
@@ -206,6 +211,17 @@ function useSynq() {
     setProfile(nextProfile)
     window.dispatchEvent(new CustomEvent('synq-profile-updated', { detail: nextProfile }))
   }, [])
+  const refreshPreferences = useCallback(async (authUser) => {
+    if (!configured) {
+      setPreferences({
+        user_id: demoUser.id,
+        chat_notifications_enabled: true,
+        default_playlist_public: false,
+      })
+      return
+    }
+    setPreferences(await getAccountPreferences(authUser?.id))
+  }, [])
   useEffect(() => {
     if (!configured) {
       setUser(demoUser)
@@ -216,41 +232,103 @@ function useSynq() {
       .then(async ({ data, error }) => {
         if (error) throw error
         setUser(data.session?.user || null)
-        if (data.session?.user) await refreshProfile(data.session.user)
+        if (data.session?.user) {
+          await Promise.all([
+            refreshProfile(data.session.user).catch((profileError) => {
+              console.error('Não foi possível carregar o perfil:', profileError)
+            }),
+            refreshPreferences(data.session.user).catch((preferencesError) => {
+              console.error('Não foi possível carregar as preferências:', preferencesError)
+            }),
+          ])
+        }
       })
       .catch((error) => console.error('Não foi possível carregar a sessão:', error))
       .finally(() => setReady(true))
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null)
-      if (session?.user) await refreshProfile(session.user)
-      else setProfile(null)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'SIGNED_OUT') setPasswordRecovery(false)
+      if (session?.user) {
+        queueMicrotask(() =>
+          refreshProfile(session.user).catch((error) =>
+            console.error('Não foi possível atualizar o perfil:', error)
+          )
+        )
+        queueMicrotask(() =>
+          refreshPreferences(session.user).catch((error) =>
+            console.error('Não foi possível carregar as preferências:', error)
+          )
+        )
+      } else {
+        setProfile(null)
+        setPreferences(null)
+        setPasswordRecovery(false)
+      }
     })
     return () => listener.subscription.unsubscribe()
-  }, [refreshProfile])
-  return { user, profile, ready, refreshProfile, demo: !configured }
+  }, [refreshPreferences, refreshProfile])
+  return {
+    user,
+    profile,
+    preferences,
+    ready,
+    refreshProfile,
+    refreshPreferences,
+    passwordRecovery,
+    setPasswordRecovery,
+    demo: !configured,
+  }
 }
 
 function Auth() {
   const [register, setRegister] = useState(false),
+    [forgotPassword, setForgotPassword] = useState(false),
     [email, setEmail] = useState(''),
     [password, setPassword] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false)
+  const [oauthBusy, setOauthBusy] = useState(false)
   const submit = async (event) => {
     event.preventDefault()
     setBusy(true)
     setMessage('')
     try {
-      const result = register
-        ? await supabase.auth.signUp({ email: email.trim(), password })
-        : await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      setMessage(
-        result.error?.message || (register ? 'Conta criada. Confira seu e-mail.' : 'Entrando...')
-      )
+      if (forgotPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/redefinir-senha`,
+        })
+        if (error) throw error
+        setMessage('Se esse endereço estiver cadastrado, você receberá um link para redefinir a senha.')
+      } else {
+        const result = register
+          ? await supabase.auth.signUp({ email: email.trim(), password })
+          : await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (result.error) throw result.error
+        setMessage(register ? 'Conta criada. Confira seu e-mail.' : 'Entrando...')
+      }
     } catch (error) {
-      setMessage(error.message || 'Não foi possível concluir a autenticação.')
+      setMessage(
+        forgotPassword
+          ? 'Não foi possível solicitar a recuperação agora. Tente novamente mais tarde.'
+          : error.message || 'Não foi possível concluir a autenticação.'
+      )
     } finally {
       setBusy(false)
+    }
+  }
+  const signInWithGoogle = async () => {
+    setOauthBusy(true)
+    setMessage('')
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      })
+      if (error) throw error
+    } catch (error) {
+      setMessage(error.message || 'Não foi possível iniciar a autenticação com Google.')
+      setOauthBusy(false)
     }
   }
   return (
@@ -272,45 +350,49 @@ function Auth() {
         <p>Descubra, compartilhe e guarde os momentos que viraram trilha sonora.</p>
       </section>
       <section className="auth-form">
-        <h2>{register ? 'Crie seu espaço' : 'Bem-vindo de volta'}</h2>
-        <p>Entre para continuar ouvindo.</p>
-        <div className="switch">
+        <h2>{forgotPassword ? 'Recuperar senha' : register ? 'Crie seu espaço' : 'Bem-vindo de volta'}</h2>
+        <p>{forgotPassword ? 'Enviaremos um link se a conta existir.' : 'Entre para continuar ouvindo.'}</p>
+        {!forgotPassword && <div className="switch">
           <button className={!register ? 'active' : ''} onClick={() => setRegister(false)}>
             Entrar
           </button>
           <button className={register ? 'active' : ''} onClick={() => setRegister(true)}>
             Criar conta
           </button>
-        </div>
+        </div>}
         <form onSubmit={submit}>
           <label>
             E-mail
             <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <label>
+          {!forgotPassword && <label>
             Senha
             <input
               required
-              minLength="6"
+              minLength={register ? 8 : undefined}
+              pattern={register ? '(?=.*[A-Za-z])(?=.*\\d).{8,}' : undefined}
+              title={register ? 'Use pelo menos 8 caracteres, com uma letra e um número.' : undefined}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </label>
+          </label>}
           <button className="primary" disabled={busy}>
-            {busy ? 'Aguarde...' : register ? 'Criar conta' : 'Entrar'}
+            {busy ? 'Aguarde...' : forgotPassword ? 'Enviar link' : register ? 'Criar conta' : 'Entrar'}
           </button>
         </form>
+        {!forgotPassword && <button type="button" className="secondary" onClick={signInWithGoogle} disabled={oauthBusy}>
+          {oauthBusy ? 'Conectando...' : 'Continuar com Google'}
+        </button>}
         <button
-          className="secondary"
-          onClick={() =>
-            supabase.auth.signInWithOAuth({
-              provider: 'google',
-              options: { redirectTo: window.location.origin },
-            })
-          }
+        type="button"
+        className="text-button"
+        onClick={() => {
+          setForgotPassword((current) => !current)
+          setMessage('')
+        }}
         >
-          Continuar com Google
+        {forgotPassword ? 'Voltar para entrar' : 'Esqueci minha senha'}
         </button>
         {message && <p className="notice">{message}</p>}
       </section>
@@ -321,9 +403,22 @@ function Auth() {
 function Shell({ app, children }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [logoutBusy, setLogoutBusy] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const logout = async () => {
-    if (configured) await supabase.auth.signOut()
-    navigate('/')
+    try {
+      setLogoutBusy(true)
+      setLogoutError('')
+      if (configured) {
+        const { error } = await supabase.auth.signOut({ scope: 'local' })
+        if (error) throw error
+      }
+      navigate('/')
+    } catch (error) {
+      setLogoutError(`Não foi possível sair: ${error.message}`)
+    } finally {
+      setLogoutBusy(false)
+    }
   }
   return (
     <div className="shell">
@@ -349,9 +444,10 @@ function Shell({ app, children }) {
             <Avatar profile={app.profile} />
             {app.profile?.display_name || 'Ouvinte'}
           </button>
-          <button className="logout" onClick={logout}>
-            <LogOut /> Sair
+          <button className="logout" onClick={logout} disabled={logoutBusy}>
+            <LogOut /> {logoutBusy ? 'Saindo...' : 'Sair'}
           </button>
+          {logoutError && <p className="form-error" role="alert">{logoutError}</p>}
         </div>
       </aside>
       <main className="content">
@@ -362,8 +458,8 @@ function Shell({ app, children }) {
         )}
         {children}
       </main>
-      <nav className="bottom-nav">
-        {nav.slice(0, 5).map(([to, label, Icon]) => (
+      <nav className="bottom-nav" aria-label="Navegação principal">
+        {nav.map(([to, label, Icon]) => (
           <NavLink
             end={to === '/'}
             key={to}
@@ -622,7 +718,11 @@ function AttachmentCard({ attachment, onOpenPlaylist, compact = false }) {
 }
 
 function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = false }) {
-  const [draft, setDraft] = useState({ title: playlist?.title || '', description: playlist?.description || '', is_public: playlist?.is_public || false })
+  const [draft, setDraft] = useState({
+    title: playlist?.title || '',
+    description: playlist?.description || '',
+    is_public: playlist?.is_public ?? app.preferences?.default_playlist_public ?? false,
+  })
   const [tracks, setTracks] = useState(playlist?.playlist_tracks || [])
   const [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
   const isNew = !playlist?.id
@@ -720,7 +820,7 @@ function Library({ app }) {
           owner_id: app.user.id,
           title: source.name,
           description: source.description || '',
-          is_public: false,
+          is_public: app.preferences?.default_playlist_public ?? false,
           imported_spotify_id: source.id,
         })
         .select()
@@ -1555,14 +1655,12 @@ function Profile({ app }) {
   const [form, setForm] = useState({ display_name: '', bio: '', favorite_genres: [] })
   const [avatarBusy, setAvatarBusy] = useState(''),
     [avatarSource, setAvatarSource] = useState(''),
-    [avatarImage, setAvatarImage] = useState(null),
-    [settingsOpen, setSettingsOpen] = useState(false)
+    [avatarImage, setAvatarImage] = useState(null)
   const avatarInputRef = useRef(null)
-  const [account, setAccount] = useState({ email: '', password: '', passwordConfirmation: '', deletion: '' })
+  const [profileSaving, setProfileSaving] = useState(false)
   const [notice, setNotice] = useState('')
   useEffect(() => {
     setForm({ display_name: app.profile?.display_name || '', bio: app.profile?.bio || '', favorite_genres: app.profile?.favorite_genres || [] })
-    setAccount((current) => ({ ...current, email: app.user?.email || '' }))
   }, [app.profile, app.user?.email])
   useEffect(() => {
     if (!avatarSource) {
@@ -1590,9 +1688,17 @@ function Profile({ app }) {
     event.preventDefault()
     if (!configured) return setNotice('Configure o Supabase para salvar seu perfil.')
     if (!form.display_name.trim()) return setNotice('Informe um nome de exibição.')
-    const { error } = await supabase.from('profiles').update({ display_name: form.display_name.trim(), bio: form.bio.trim(), favorite_genres: form.favorite_genres }).eq('id', app.user.id)
-    if (error) setNotice(error.message)
-    else { await app.refreshProfile(app.user); setNotice('Perfil salvo com sucesso.') }
+    setProfileSaving(true)
+    try {
+      const { error } = await supabase.from('profiles').update({ display_name: form.display_name.trim(), bio: form.bio.trim(), favorite_genres: form.favorite_genres }).eq('id', app.user.id)
+      if (error) throw error
+      await app.refreshProfile(app.user)
+      setNotice('Perfil salvo com sucesso.')
+    } catch (error) {
+      setNotice(`Não foi possível salvar o perfil: ${error.message}`)
+    } finally {
+      setProfileSaving(false)
+    }
   }
   const chooseAvatar = (event) => {
     const file = event.target.files?.[0]
@@ -1655,35 +1761,6 @@ function Profile({ app }) {
       setAvatarBusy('')
     }
   }
-  const updateEmail = async (event) => {
-    event.preventDefault()
-    if (!configured) return setNotice('Configure o Supabase para alterar o e-mail.')
-    if (!account.email.trim() || account.email.trim() === app.user.email) return setNotice('Digite um novo e-mail para alterá-lo.')
-    const { error } = await supabase.auth.updateUser({ email: account.email.trim() }, { emailRedirectTo: `${window.location.origin}/perfil` })
-    setNotice(error ? error.message : 'Confira os e-mails de confirmação para concluir a alteração.')
-  }
-  const updatePassword = async (event) => {
-    event.preventDefault()
-    if (!configured) return setNotice('Configure o Supabase para alterar a senha.')
-    if (account.password.length < 8) return setNotice('A nova senha deve ter pelo menos 8 caracteres.')
-    if (account.password !== account.passwordConfirmation) return setNotice('A confirmação da senha não confere.')
-    const { error } = await supabase.auth.updateUser({ password: account.password })
-    setNotice(error ? error.message : 'Senha atualizada com sucesso.')
-    if (!error) setAccount((current) => ({ ...current, password: '', passwordConfirmation: '' }))
-  }
-  const sendRecovery = async () => {
-    if (!configured) return setNotice('Configure o Supabase para recuperar a senha.')
-    const { error } = await supabase.auth.resetPasswordForEmail(app.user.email, { redirectTo: `${window.location.origin}/perfil` })
-    setNotice(error ? error.message : 'Se o e-mail estiver configurado, enviamos um link de recuperação.')
-  }
-  const deleteAccount = async () => {
-    if (!configured) return setNotice('Configure o Supabase para excluir a conta.')
-    if (account.deletion !== 'EXCLUIR') return setNotice('Digite EXCLUIR para confirmar a exclusão definitiva.')
-    if (!window.confirm('Última confirmação: deseja apagar sua conta e todos os seus dados?')) return
-    const { error } = await supabase.functions.invoke('delete-account', { body: { confirmation: 'EXCLUIR' } })
-    if (error) return setNotice(`Não foi possível excluir: ${error.message}. Confirme se a Edge Function foi publicada.`)
-    await supabase.auth.signOut()
-  }
   return <Page title="Seu Perfil" subtitle="Faça seu perfil soar como você.">
     <div className="profile-hero"><div><div className="avatar-editor"><button type="button" className="avatar-trigger" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)} aria-label="Alterar foto de perfil"><Avatar profile={app.profile} className="big" /></button><button type="button" className="avatar-upload" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)} aria-label="Selecionar nova foto"><Camera /></button><input ref={avatarInputRef} className="avatar-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} disabled={Boolean(avatarBusy)} /></div><div className="avatar-actions"><button type="button" className="secondary small-button" onClick={() => avatarInputRef.current?.click()} disabled={Boolean(avatarBusy)}>{avatarBusy === 'upload' ? 'Enviando...' : 'Alterar foto'}</button>{app.profile?.avatar_url && <button type="button" className="text-button" onClick={removeAvatar} disabled={Boolean(avatarBusy)}>{avatarBusy === 'remove' ? 'Removendo...' : 'Remover foto'}</button>}</div></div><div><h2>{app.profile?.display_name || 'Ouvinte Harmony'}</h2><p>{app.profile?.bio || 'Sua próxima música favorita começa aqui.'}</p></div></div>
     {avatarSource && avatarImage && <AvatarCropDialog image={avatarImage} onSave={uploadAvatar} onCancel={() => setAvatarSource('')} busy={avatarBusy === 'upload'} />}
@@ -1696,11 +1773,561 @@ function Profile({ app }) {
         selectedGenres={form.favorite_genres}
         onChange={(favorite_genres) => setForm((current) => ({ ...current, favorite_genres }))}
       />
-      <button className="primary">Salvar alterações</button>
+      <button className="primary" disabled={profileSaving}>{profileSaving ? 'Salvando...' : 'Salvar alterações'}</button>
     </form>
-    <section className="account-settings"><header><div><h2><Settings /> Configurações da conta</h2><p>Gerencie seu acesso e dados de segurança.</p></div><button className="secondary" onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? 'Fechar' : 'Abrir'}</button></header>{settingsOpen && <div className="settings-grid"><form onSubmit={updateEmail}><h3>Alterar e-mail</h3><p>E-mail atual: <b>{app.user?.email}</b></p><input type="email" value={account.email} onChange={(event) => setAccount({ ...account, email: event.target.value })} /><button className="secondary">Solicitar alteração</button></form><form onSubmit={updatePassword}><h3>Alterar senha</h3><input type="password" minLength="8" value={account.password} placeholder="Nova senha" onChange={(event) => setAccount({ ...account, password: event.target.value })} /><input type="password" minLength="8" value={account.passwordConfirmation} placeholder="Confirmar nova senha" onChange={(event) => setAccount({ ...account, passwordConfirmation: event.target.value })} /><button className="secondary">Salvar nova senha</button><button type="button" className="text-button" onClick={sendRecovery}>Enviar link de recuperação</button></form><form className="danger-zone" onSubmit={(event) => { event.preventDefault(); deleteAccount() }}><h3><ShieldCheck /> Excluir conta</h3><p>Isso remove permanentemente seus dados, mensagens, playlists e avatar.</p><input value={account.deletion} placeholder="Digite EXCLUIR" onChange={(event) => setAccount({ ...account, deletion: event.target.value })} /><button className="danger-button">Excluir definitivamente</button></form></div>}</section>
   </Page>
 }
+
+function PasswordField({ id, label, value, onChange, show, onToggle, autoComplete }) {
+  return (
+    <label className="password-field" htmlFor={id}>
+      {label}
+      <span className="password-control">
+        <input
+          id={id}
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          required
+        />
+        <button
+          type="button"
+          className="icon"
+          aria-label={show ? `Ocultar ${label.toLowerCase()}` : `Mostrar ${label.toLowerCase()}`}
+          aria-pressed={show}
+          onClick={onToggle}
+        >
+          {show ? <EyeOff /> : <Eye />}
+        </button>
+      </span>
+    </label>
+  )
+}
+
+function passwordPolicyError(password) {
+  if (password.length < 8) return 'A senha deve ter pelo menos 8 caracteres.'
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return 'A senha precisa conter pelo menos uma letra e um número.'
+  }
+  return ''
+}
+
+function passwordStrength(password) {
+  if (!password) return { label: 'Não informada', score: 0 }
+  const score =
+    Number(password.length >= 8) +
+    Number(password.length >= 12) +
+    Number(/[A-Z]/.test(password) && /[a-z]/.test(password)) +
+    Number(/\d/.test(password)) +
+    Number(/[^A-Za-z0-9]/.test(password))
+  const labels = ['Muito fraca', 'Fraca', 'Razoável', 'Boa', 'Forte', 'Muito forte']
+  return { label: labels[score], score }
+}
+
+function browserDescription() {
+  const agent = navigator.userAgent
+  const browser = /Edg\//.test(agent)
+    ? 'Microsoft Edge'
+    : /Firefox\//.test(agent)
+      ? 'Firefox'
+      : /Chrome\//.test(agent)
+        ? 'Google Chrome'
+        : /Safari\//.test(agent)
+          ? 'Safari'
+          : 'Navegador'
+  const system = /Android/.test(agent)
+    ? 'Android'
+    : /iPhone|iPad|iPod/.test(agent)
+      ? 'iOS'
+      : /Windows/.test(agent)
+        ? 'Windows'
+        : /Mac OS/.test(agent)
+          ? 'macOS'
+          : /Linux/.test(agent)
+            ? 'Linux'
+            : 'Sistema não identificado'
+  return `${browser} · ${system}`
+}
+
+function AccountSettings({ app }) {
+  const navigate = useNavigate()
+  const [profileForm, setProfileForm] = useState({
+    display_name: '',
+    username: '',
+  })
+  const [preferencesForm, setPreferencesForm] = useState({
+    chat_notifications_enabled: true,
+    default_playlist_public: false,
+  })
+  const [passwordForm, setPasswordForm] = useState({
+    current: '',
+    next: '',
+    confirmation: '',
+  })
+  const [emailForm, setEmailForm] = useState({ email: '', password: '' })
+  const [deleteForm, setDeleteForm] = useState({ password: '', confirmation: '' })
+  const [pendingEmail, setPendingEmail] = useState(app.user?.new_email || '')
+  const [session, setSession] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [feedback, setFeedback] = useState({ type: '', text: '' })
+  const [showPasswords, setShowPasswords] = useState({})
+  const strength = passwordStrength(passwordForm.next)
+  const emailProvider = app.user?.app_metadata?.providers?.includes('email')
+
+  useEffect(() => {
+    setProfileForm({
+      display_name: app.profile?.display_name || '',
+      username: app.profile?.username || '',
+    })
+  }, [app.profile])
+
+  useEffect(() => {
+    setPreferencesForm({
+      chat_notifications_enabled: app.preferences?.chat_notifications_enabled !== false,
+      default_playlist_public: app.preferences?.default_playlist_public === true,
+    })
+  }, [app.preferences])
+
+  useEffect(() => {
+    setPendingEmail(app.user?.new_email || '')
+  }, [app.user?.new_email])
+
+  useEffect(() => {
+    if (!configured) return undefined
+    let mounted = true
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          setFeedback({ type: 'error', text: 'Não foi possível carregar a sessão atual.' })
+          return
+        }
+        if (mounted) setSession(data.session)
+      })
+      .catch(() => {
+        if (mounted) setFeedback({ type: 'error', text: 'Não foi possível carregar a sessão atual.' })
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const notify = (type, text) => setFeedback({ type, text })
+  const togglePassword = (key) =>
+    setShowPasswords((current) => ({ ...current, [key]: !current[key] }))
+
+  const reauthenticate = async (password) => {
+    if (!emailProvider || !app.user?.email) {
+      throw new Error('Esta conta não possui autenticação por senha. Use o provedor de login vinculado.')
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: app.user.email,
+      password,
+    })
+    if (error?.status === 400) {
+      throw new Error('Senha atual incorreta. Confira e tente novamente.')
+    }
+    if (error) throw error
+    if (data.user?.id !== app.user.id) throw new Error('Não foi possível confirmar sua identidade.')
+  }
+
+  const saveAccount = async (event) => {
+    event.preventDefault()
+    if (!configured) return notify('error', 'Configure o Supabase para salvar as configurações.')
+    const username = profileForm.username.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+      return notify('error', 'O nome de usuário deve ter de 3 a 30 caracteres: letras, números ou _.')
+    }
+    if (!profileForm.display_name.trim() || profileForm.display_name.trim().length > 80) {
+      return notify('error', 'O nome de exibição deve ter de 1 a 80 caracteres.')
+    }
+    setBusy('account')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          display_name: profileForm.display_name.trim(),
+          username,
+        })
+        .eq('id', app.user.id)
+      if (error) {
+        if (error.code === '23505') throw new Error('Esse nome de usuário já está em uso.')
+        throw error
+      }
+      await app.refreshProfile(app.user)
+      notify('success', 'Configurações da conta salvas.')
+    } catch (error) {
+      notify('error', error.message || 'Não foi possível salvar as configurações.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const savePreferences = async (event) => {
+    event.preventDefault()
+    if (!configured) return notify('error', 'Configure o Supabase para salvar as preferências.')
+    setBusy('preferences')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.from('account_preferences').upsert(
+        {
+          user_id: app.user.id,
+          ...preferencesForm,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
+      if (error) throw error
+      await app.refreshPreferences(app.user)
+      notify('success', 'Preferências privadas salvas.')
+    } catch (error) {
+      notify('error', error.message || 'Não foi possível salvar as preferências.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const changePassword = async (event) => {
+    event.preventDefault()
+    const policyError = passwordPolicyError(passwordForm.next)
+    if (policyError) return notify('error', policyError)
+    if (passwordForm.next === passwordForm.current) {
+      return notify('error', 'A nova senha deve ser diferente da senha atual.')
+    }
+    if (passwordForm.next !== passwordForm.confirmation) {
+      return notify('error', 'A confirmação da nova senha não confere.')
+    }
+    setBusy('password')
+    setFeedback({ type: '', text: '' })
+    try {
+      await reauthenticate(passwordForm.current)
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.next })
+      if (error) throw error
+      setPasswordForm({ current: '', next: '', confirmation: '' })
+      let signOutError
+      try {
+        const result = await supabase.auth.signOut({ scope: 'others' })
+        signOutError = result.error
+      } catch {
+        signOutError = new Error('Falha de rede ao encerrar outras sessões.')
+      }
+      if (signOutError) {
+        notify(
+          'error',
+          'A senha foi alterada, mas não foi possível encerrar as outras sessões. Tente novamente na seção Sessões.'
+        )
+        return
+      }
+      notify('success', 'Senha alterada. As outras sessões foram encerradas.')
+    } catch (error) {
+      notify('error', error.message || 'Não foi possível alterar a senha.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const requestEmailChange = async (event) => {
+    event.preventDefault()
+    const email = emailForm.email.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return notify('error', 'Informe um endereço de e-mail válido.')
+    }
+    if (email === app.user.email?.toLowerCase()) {
+      return notify('error', 'Informe um e-mail diferente do atual.')
+    }
+    setBusy('email')
+    setFeedback({ type: '', text: '' })
+    try {
+      await reauthenticate(emailForm.password)
+      const { data, error } = await supabase.auth.updateUser(
+        { email },
+        { emailRedirectTo: `${window.location.origin}/configuracoes` }
+      )
+      if (error) throw new Error('Não foi possível solicitar a alteração. Verifique o endereço e tente novamente.')
+      setPendingEmail(data.user?.new_email || email)
+      setEmailForm((current) => ({ ...current, password: '' }))
+      notify('success', 'Solicitação enviada. Confirme o link para o novo e-mail; o endereço atual não muda até a confirmação.')
+    } catch (error) {
+      notify('error', error.message || 'Não foi possível solicitar a alteração do e-mail.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const resendEmailChange = async () => {
+    setBusy('resend-email')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'email_change',
+        email: app.user.email,
+        options: { emailRedirectTo: `${window.location.origin}/configuracoes` },
+      })
+      if (error) throw error
+      notify('success', 'Se a solicitação ainda estiver válida, um novo link será enviado.')
+    } catch {
+      notify('error', 'Não foi possível reenviar o link. Solicite uma nova alteração de e-mail.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const cancelEmailChange = async () => {
+    if (!window.confirm('Cancelar a alteração pendente de e-mail?')) return
+    setBusy('cancel-email')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.functions.invoke('cancel-email-change', { body: {} })
+      if (error) throw error
+      setPendingEmail('')
+      notify('success', 'Alteração de e-mail cancelada.')
+    } catch (error) {
+      notify('error', `Não foi possível cancelar a alteração: ${error.message}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const sendRecovery = async () => {
+    setBusy('recovery')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(app.user.email, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      })
+      if (error) throw error
+      notify('success', 'Se esse endereço estiver cadastrado, você receberá um link para redefinir a senha.')
+    } catch {
+      notify('error', 'Não foi possível solicitar o link de recuperação. Tente novamente mais tarde.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const endOtherSessions = async () => {
+    if (!window.confirm('Encerrar todas as outras sessões da sua conta?')) return
+    setBusy('sessions')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'others' })
+      if (error) throw error
+      notify('success', 'As outras sessões foram encerradas.')
+    } catch (error) {
+      notify('error', `Não foi possível encerrar as outras sessões: ${error.message}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const endCurrentSession = async () => {
+    setBusy('current-session')
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
+      if (error) throw error
+      navigate('/login', { replace: true })
+    } catch (error) {
+      notify('error', `Não foi possível encerrar esta sessão: ${error.message}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const deleteAccount = async (event) => {
+    event.preventDefault()
+    if (deleteForm.confirmation !== 'EXCLUIR') {
+      return notify('error', 'Digite EXCLUIR para confirmar a exclusão.')
+    }
+    if (!window.confirm('Esta ação apaga permanentemente seu perfil, playlists, mensagens e arquivos. Continuar?')) {
+      return
+    }
+    setBusy('delete')
+    setFeedback({ type: '', text: '' })
+    try {
+      const { error } = await supabase.functions.invoke('delete-account', {
+        body: { confirmation: 'EXCLUIR', password: deleteForm.password },
+      })
+      if (error) {
+        let message = error.message
+        if (error.context instanceof Response) {
+          const response = await error.context.json().catch(() => null)
+          if (response?.error) message = response.error
+        }
+        throw new Error(message)
+      }
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
+      if (signOutError) {
+        notify('error', 'A conta foi excluída, mas não foi possível encerrar a sessão. Feche este navegador.')
+        return
+      }
+      navigate('/login', { replace: true })
+    } catch (error) {
+      notify('error', `Não foi possível excluir a conta: ${error.message}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  if (!configured) {
+    return (
+      <Page title="Configurações" subtitle="Gerencie sua conta, segurança e sessões.">
+        <p className="notice" role="status">Configure o Supabase para acessar as configurações persistentes da conta.</p>
+      </Page>
+    )
+  }
+
+  return (
+    <Page title="Configurações" subtitle="Gerencie sua conta, segurança e sessões.">
+      {feedback.text && (
+        <p className={`notice settings-feedback ${feedback.type}`} role={feedback.type === 'error' ? 'alert' : 'status'}>
+          {feedback.text}
+        </p>
+      )}
+      <section className="settings-section" aria-labelledby="settings-account-title">
+        <h2 id="settings-account-title">Conta</h2>
+        <p className="settings-description">Seus dados públicos e preferências do Harmony.</p>
+        <form className="settings-form" onSubmit={saveAccount}>
+          <label htmlFor="settings-display-name">Nome de exibição</label>
+          <input id="settings-display-name" value={profileForm.display_name} maxLength="80" onChange={(event) => setProfileForm({ ...profileForm, display_name: event.target.value })} required />
+          <label htmlFor="settings-username">Nome de usuário</label>
+          <input id="settings-username" value={profileForm.username} maxLength="30" autoComplete="username" onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value })} required />
+          <button className="primary" disabled={Boolean(busy)}>{busy === 'account' ? 'Salvando...' : 'Salvar configurações'}</button>
+        </form>
+        <form className="settings-form preferences-form" onSubmit={savePreferences}>
+          <h3>Preferências privadas</h3>
+          <label className="settings-toggle">
+            <input type="checkbox" checked={preferencesForm.chat_notifications_enabled} onChange={(event) => setPreferencesForm({ ...preferencesForm, chat_notifications_enabled: event.target.checked })} />
+            <span>Permitir notificações de novas mensagens</span>
+          </label>
+          <label className="settings-toggle">
+            <input type="checkbox" checked={preferencesForm.default_playlist_public} onChange={(event) => setPreferencesForm({ ...preferencesForm, default_playlist_public: event.target.checked })} />
+            <span>Criar playlists públicas por padrão</span>
+          </label>
+          <button className="secondary" disabled={Boolean(busy)}>{busy === 'preferences' ? 'Salvando...' : 'Salvar preferências'}</button>
+        </form>
+        <form className="settings-form settings-email-form" onSubmit={requestEmailChange}>
+          <h3>Alterar e-mail de login</h3>
+          <p>E-mail atual: <b>{app.user.email}</b></p>
+          {pendingEmail ? (
+            <div className="pending-email">
+              <p role="status">Aguardando confirmação do novo e-mail: <b>{pendingEmail}</b></p>
+              <div className="settings-actions">
+                <button type="button" className="secondary" onClick={resendEmailChange} disabled={Boolean(busy)}>{busy === 'resend-email' ? 'Reenviando...' : 'Reenviar link'}</button>
+                <button type="button" className="text-button" onClick={cancelEmailChange} disabled={Boolean(busy)}>{busy === 'cancel-email' ? 'Cancelando...' : 'Cancelar solicitação'}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {!emailProvider && <p className="hint">Esta conta usa login social e não possui senha de e-mail para reautenticação.</p>}
+              <label htmlFor="settings-new-email">Novo e-mail</label>
+              <input id="settings-new-email" type="email" autoComplete="email" value={emailForm.email} onChange={(event) => setEmailForm({ ...emailForm, email: event.target.value })} required />
+              <PasswordField id="email-current-password" label="Senha atual" value={emailForm.password} onChange={(password) => setEmailForm({ ...emailForm, password })} show={Boolean(showPasswords.email)} onToggle={() => togglePassword('email')} autoComplete="current-password" />
+              <button className="secondary" disabled={Boolean(busy) || !emailProvider}>{busy === 'email' ? 'Enviando solicitação...' : 'Solicitar alteração'}</button>
+            </>
+          )}
+        </form>
+      </section>
+
+      <section className="settings-section" aria-labelledby="settings-security-title">
+        <h2 id="settings-security-title">Segurança</h2>
+        <p className="settings-description">Reautentique com a senha atual para fazer alterações sensíveis.</p>
+        {!emailProvider && <p className="hint">Sua conta usa login social. A troca de senha deve ser feita pelo provedor de autenticação.</p>}
+        <form className="settings-form" onSubmit={changePassword}>
+          <h3>Alterar senha</h3>
+          <PasswordField id="current-password" label="Senha atual" value={passwordForm.current} onChange={(current) => setPasswordForm({ ...passwordForm, current })} show={Boolean(showPasswords.current)} onToggle={() => togglePassword('current')} autoComplete="current-password" />
+          <PasswordField id="new-password" label="Nova senha" value={passwordForm.next} onChange={(next) => setPasswordForm({ ...passwordForm, next })} show={Boolean(showPasswords.next)} onToggle={() => togglePassword('next')} autoComplete="new-password" />
+          <div className={`password-strength strength-${strength.score}`} aria-live="polite">
+            <span>Força da senha: <b>{strength.label}</b></span>
+            <span className="strength-meter" aria-hidden="true"><i style={{ width: `${(strength.score / 5) * 100}%` }} /></span>
+          </div>
+          <PasswordField id="confirm-password" label="Confirmar nova senha" value={passwordForm.confirmation} onChange={(confirmation) => setPasswordForm({ ...passwordForm, confirmation })} show={Boolean(showPasswords.confirmation)} onToggle={() => togglePassword('confirmation')} autoComplete="new-password" />
+          <p className="hint">Mínimo de 8 caracteres, com pelo menos uma letra e um número. Após a troca, as outras sessões serão encerradas.</p>
+          <button className="primary" disabled={Boolean(busy) || !emailProvider}>{busy === 'password' ? 'Atualizando senha...' : 'Alterar senha'}</button>
+        </form>
+        <div className="settings-form recovery-card">
+          <h3>Recuperação de senha</h3>
+          <p>Enviaremos um link de uso único para o endereço associado à conta.</p>
+          <button type="button" className="secondary" onClick={sendRecovery} disabled={Boolean(busy)}>{busy === 'recovery' ? 'Enviando...' : 'Enviar link de recuperação'}</button>
+        </div>
+      </section>
+
+      <section className="settings-section" aria-labelledby="settings-sessions-title">
+        <h2 id="settings-sessions-title">Sessões</h2>
+        <p className="settings-description">A sessão atual está ativa neste navegador. O Supabase permite encerrar todas as outras sessões, mas não disponibiliza pela API cliente uma lista confiável de dispositivos individuais.</p>
+        <article className="active-session">
+          <div><b>{browserDescription()}</b><span>Este dispositivo · sessão atual</span><small>Último login da conta: {session?.user?.last_sign_in_at ? new Date(session.user.last_sign_in_at).toLocaleString('pt-BR') : 'agora'}</small></div>
+          <button className="secondary" type="button" onClick={endOtherSessions} disabled={Boolean(busy)}>{busy === 'sessions' ? 'Encerrando...' : 'Sair de todos os outros dispositivos'}</button>
+        </article>
+        <button className="text-button" type="button" onClick={endCurrentSession} disabled={Boolean(busy)}>{busy === 'current-session' ? 'Encerrando...' : 'Encerrar sessão deste dispositivo'}</button>
+      </section>
+
+      <section className="settings-section danger-zone settings-danger" aria-labelledby="settings-danger-title">
+        <h2 id="settings-danger-title"><ShieldCheck /> Zona de perigo</h2>
+        <p className="settings-description">A exclusão remove permanentemente perfil, playlists, mensagens, preferências e arquivos associados.</p>
+        <form className="settings-form" onSubmit={deleteAccount}>
+          {!emailProvider && <p className="hint">A exclusão exige senha de e-mail para reautenticação. Esta conta usa login social.</p>}
+          <PasswordField id="delete-current-password" label="Senha atual" value={deleteForm.password} onChange={(password) => setDeleteForm({ ...deleteForm, password })} show={Boolean(showPasswords.delete)} onToggle={() => togglePassword('delete')} autoComplete="current-password" />
+          <label htmlFor="delete-confirmation">Digite EXCLUIR para confirmar</label>
+          <input id="delete-confirmation" value={deleteForm.confirmation} onChange={(event) => setDeleteForm({ ...deleteForm, confirmation: event.target.value })} required />
+          <button className="danger-button" disabled={Boolean(busy) || !emailProvider}>{busy === 'delete' ? 'Excluindo conta...' : 'Excluir minha conta'}</button>
+        </form>
+      </section>
+    </Page>
+  )
+}
+
+function ResetPassword({ app }) {
+  const navigate = useNavigate()
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [show, setShow] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [completed, setCompleted] = useState(false)
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const policyError = passwordPolicyError(password)
+    if (policyError) return setNotice(policyError)
+    if (password !== confirmation) return setNotice('A confirmação da senha não confere.')
+    setBusy(true)
+    setNotice('')
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      if (error) throw error
+      setCompleted(true)
+      app.setPasswordRecovery(false)
+      setNotice('Senha redefinida com sucesso.')
+    } catch (error) {
+      setNotice(error.message || 'Não foi possível redefinir a senha. Solicite um novo link.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (completed) {
+    return (
+      <Page title="Senha atualizada" subtitle="Sua senha foi redefinida com sucesso.">
+        <button className="primary" onClick={() => navigate('/', { replace: true })}>Continuar para o Harmony</button>
+      </Page>
+    )
+  }
+  if (!app.passwordRecovery) return <Navigate to="/" replace />
+  return (
+    <Page title="Redefinir senha" subtitle="Escolha uma senha nova para sua conta.">
+      <form className="settings-form reset-password-form" onSubmit={submit}>
+        <PasswordField id="recovery-new-password" label="Nova senha" value={password} onChange={setPassword} show={show} onToggle={() => setShow(!show)} autoComplete="new-password" />
+        <div className={`password-strength strength-${passwordStrength(password).score}`} aria-live="polite">Força da senha: <b>{passwordStrength(password).label}</b></div>
+        <PasswordField id="recovery-confirm-password" label="Confirmar nova senha" value={confirmation} onChange={setConfirmation} show={showConfirmation} onToggle={() => setShowConfirmation(!showConfirmation)} autoComplete="new-password" />
+        {notice && <p className="notice" role="alert">{notice}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'Salvando...' : 'Redefinir senha'}</button>
+      </form>
+    </Page>
+  )
+}
+
 function SpotifyCallback() {
   const navigate = useNavigate(),
     [message, setMessage] = useState('Conectando ao Spotify...')
@@ -1722,11 +2349,18 @@ function SpotifyCallback() {
   )
 }
 function AppRoutes() {
+  const location = useLocation()
   const baseApp = useSynq()
-  const unread = useUnreadMessages(baseApp.user?.id)
+  const unread = useUnreadMessages(
+    baseApp.user?.id,
+    baseApp.preferences?.chat_notifications_enabled === true
+  )
   const app = { ...baseApp, ...unread }
   if (!app.ready) return <main className="callback">Carregando Harmony...</main>
   if (configured && !app.user) return <Auth />
+  if (app.passwordRecovery && location.pathname !== '/redefinir-senha') {
+    return <Navigate to="/redefinir-senha" replace />
+  }
   return (
     <Shell app={app}>
       <Routes>
@@ -1736,6 +2370,8 @@ function AppRoutes() {
         <Route path="/mensagens" element={<Messages app={app} />} />
         <Route path="/retrospectiva" element={<Retrospective app={app} />} />
         <Route path="/perfil" element={<Profile app={app} />} />
+        <Route path="/configuracoes" element={<AccountSettings app={app} />} />
+        <Route path="/redefinir-senha" element={<ResetPassword app={app} />} />
         <Route path="/spotify/callback" element={<SpotifyCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

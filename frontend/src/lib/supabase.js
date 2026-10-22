@@ -9,7 +9,12 @@ export const supabase = configured ? createClient(url, key) : null
 
 export async function getProfile(userId) {
   if (!supabase || !userId) return null
-  const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error) throw error
   return data
 }
 
@@ -17,12 +22,31 @@ export async function ensureProfile(user) {
   if (!supabase || !user) return null
   const existing = await getProfile(user.id)
   if (existing) return existing
+  const usernameBase = (user.email?.split('@')[0] || 'ouvinte')
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .slice(0, 22)
   const profile = {
     id: user.id,
     display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Novo ouvinte',
-    username: `${(user.email?.split('@')[0] || 'ouvinte').replace(/[^a-zA-Z0-9_]/g, '_')}_${user.id.slice(0, 6)}`,
+    username: `${usernameBase || 'ouvinte'}_${user.id.slice(0, 6)}`,
   }
   const { data, error } = await supabase.from('profiles').upsert(profile).select().single()
   if (error) throw error
   return data
+}
+
+export async function getAccountPreferences(userId) {
+  const defaults = {
+    user_id: userId,
+    chat_notifications_enabled: true,
+    default_playlist_public: false,
+  }
+  if (!supabase || !userId) return defaults
+  const { data, error } = await supabase
+    .from('account_preferences')
+    .select('user_id, chat_notifications_enabled, default_playlist_public')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data || defaults
 }

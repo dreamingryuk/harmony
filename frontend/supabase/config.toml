@@ -1,5 +1,12 @@
+[auth]
+password_min_length = 8
+password_requirements = "letters_digits"
+
 [functions.delete-account]
 verify_jwt = true
 
 [functions.avatar]
+verify_jwt = true
+
+[functions.cancel-email-change]
 verify_jwt = true
