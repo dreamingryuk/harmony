@@ -2,7 +2,11 @@
 
 ## Aplicação
 
-`src/main.jsx` monta `App.jsx`, que contém o roteamento, a sessão e as páginas da aplicação. `src/lib/supabase.js` configura o cliente Supabase e cria o perfil no primeiro acesso; `src/lib/spotify.js` implementa OAuth PKCE e chamadas de leitura/escrita permitidas pela API Spotify.
+`src/main.jsx` monta `App.jsx`, que compõe o roteamento da aplicação. As telas ficam separadas em `src/pages/`, e os componentes reutilizáveis em `src/components/`. `src/hooks/` concentra o estado e os fluxos compartilhados da sessão; `src/lib/` contém os adaptadores dos serviços externos e persistência, enquanto `src/utils/` guarda transformações e regras sem interface.
+
+Essa estrutura é MVC-inspirada para uma aplicação React: `lib/` e `utils/` formam a camada de modelo, hooks e ações das telas coordenam os fluxos, e páginas/componentes formam as views. A lógica específica de uma tela permanece junto dela para evitar abstrações artificiais; funcionalidades compartilhadas devem ser extraídas para hooks, componentes ou módulos de domínio quando passarem a ser reutilizadas.
+
+Para encontrar os fluxos principais: autenticação e sessão em `hooks/useSynq.js` e `pages/Auth.jsx`; biblioteca em `pages/Library.jsx`; comunidade e mensagens em `pages/Community.jsx` e `pages/Messages.jsx`; perfil e configurações em `pages/Profile.jsx` e `pages/AccountSettings.jsx`; apresentação e edição de playlists em `components/PlaylistComponents.jsx`.
 
 O frontend acessa Supabase diretamente. O diretório `backend/` na raiz contém uma API Express auxiliar com apenas `GET /api/health`; ela não faz parte do fluxo de autenticação ou persistência.
 
