@@ -57,11 +57,13 @@ export function MentionComposer({
   className,
   rows = 3,
   required = false,
+  floatingSuggestions = false,
 }) {
   const inputRef = useRef(null)
   const highlightRef = useRef(null)
   const [mention, setMention] = useState(null)
   const [suggestionsMaxHeight, setSuggestionsMaxHeight] = useState(320)
+  const [suggestionsPosition, setSuggestionsPosition] = useState(null)
   const suggestions = mention
     ? profiles
         .filter((profile) =>
@@ -74,8 +76,18 @@ export function MentionComposer({
     const input = inputRef.current
     if (!input || suggestions.length === 0) return
     const updateAvailableHeight = () => {
-      const availableHeight = window.innerHeight - input.getBoundingClientRect().bottom - 20
-      setSuggestionsMaxHeight(Math.max(100, Math.min(320, availableHeight)))
+      const rect = input.getBoundingClientRect()
+      const maxHeight = Math.max(
+        100,
+        Math.min(320, window.innerHeight - rect.bottom - 20)
+      )
+      setSuggestionsMaxHeight(maxHeight)
+      if (floatingSuggestions) {
+        const width = Math.min(440, window.innerWidth - 24)
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))
+        const top = Math.min(rect.bottom + 7, window.innerHeight - maxHeight - 12)
+        setSuggestionsPosition({ top, left, width, maxHeight })
+      }
     }
     updateAvailableHeight()
     window.addEventListener('resize', updateAvailableHeight)
@@ -84,7 +96,7 @@ export function MentionComposer({
       window.removeEventListener('resize', updateAvailableHeight)
       window.removeEventListener('scroll', updateAvailableHeight, true)
     }
-  }, [suggestions.length])
+  }, [floatingSuggestions, suggestions.length])
 
   const updateValue = (nextValue, cursor) => {
     onChange(nextValue)
@@ -147,7 +159,9 @@ export function MentionComposer({
           className="mention-suggestions"
           role="listbox"
           aria-label="Pessoas para mencionar"
-          style={{ maxHeight: suggestionsMaxHeight }}
+          style={floatingSuggestions
+            ? { position: 'fixed', zIndex: 15, ...suggestionsPosition }
+            : { maxHeight: suggestionsMaxHeight }}
         >
           {suggestions.map((profile) => (
             <button

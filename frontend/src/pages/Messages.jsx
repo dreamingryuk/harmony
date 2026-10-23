@@ -3,6 +3,7 @@ import { Bell, Send } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
+import { MentionComposer, MentionText } from '../components/MentionComposer'
 
 export function Messages({ app }) {
   const userId = app.user.id
@@ -125,13 +126,21 @@ export function Messages({ app }) {
                 <b>{selected.display_name}</b>
               </header>
               <div className="chat" ref={chatRef}>
-                {messages.map((message) => <div className={`message-bubble ${message.sender_id === app.user.id ? 'mine' : ''}`} key={message.id}>{message.content && <p>{message.content}</p>}{message.track && <AttachmentCard attachment={message.track} compact onOpenPlaylist={openPlaylist} />}</div>)}
+                {messages.map((message) => (
+                  <div className={`message-bubble ${message.sender_id === app.user.id ? 'mine' : ''}`} key={message.id}>
+                    {message.content && <p><MentionText text={message.content} profiles={profiles} /></p>}
+                    {message.track && <AttachmentCard attachment={message.track} compact onOpenPlaylist={openPlaylist} />}
+                  </div>
+                ))}
               </div>
-              <form onSubmit={send}>
-                <input
+              <form className="message-composer" onSubmit={send}>
+                <MentionComposer
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  onChange={setText}
+                  profiles={profiles}
                   placeholder="Digite uma mensagem..."
+                  rows={2}
+                  floatingSuggestions
                 />
                 <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />
                 <button className="primary">

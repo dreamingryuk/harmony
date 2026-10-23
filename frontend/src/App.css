@@ -94,6 +94,10 @@ button {
   padding: 38px 42px;
   margin: auto;
 }
+.page:has(.messages) {
+  max-width: 1600px;
+  padding: 28px clamp(20px, 3vw, 48px);
+}
 .page-header h1 {
   font-size: 30px;
   letter-spacing: -1px;
@@ -413,7 +417,8 @@ button {
   width: 18px;
 }
 .messages {
-  height: 570px;
+  height: clamp(540px, calc(100dvh - 260px), 950px);
+  min-height: 0;
   display: grid;
   grid-template-columns: 260px 1fr;
   grid-template-rows: minmax(0, 1fr);
@@ -458,24 +463,13 @@ button {
 }
 .chat {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   padding: 17px;
   background: #fbfdfc;
-}
-.chat p {
-  max-width: 72%;
-  width: max-content;
-  background: #e9f1ed;
-  padding: 9px 12px;
-  border-radius: 12px;
-  margin: 8px 0;
-  line-height: 1.4;
-}
-.chat p.mine {
-  margin-left: auto;
-  background: #d5f6e8;
 }
 .conversation form {
   padding: 11px;
@@ -894,14 +888,19 @@ button {
 .post .attachment { margin: 10px 0; }
 .message-tools { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
 .messages aside > button span:not(.avatar) { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 7px; }
-.message-bubble { max-width: 72%; width: max-content; background: #e9f1ed; padding: 9px 12px; border-radius: 12px; margin: 8px 0; line-height: 1.4; overflow-wrap: anywhere; }
+.message-bubble { box-sizing: border-box; display: block; width: fit-content; max-width: min(78%, 680px); background: #e9f1ed; padding: 9px 12px; border-radius: 12px; margin: 8px 0; line-height: 1.5; overflow-wrap: anywhere; word-break: normal; }
 .message-bubble.mine { margin-left: auto; background: #d5f6e8; }
-.message-bubble p { margin: 0; }
+.message-bubble p { max-width: none; width: auto; margin: 0; padding: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .message-bubble .attachment { margin-top: 7px; background: rgba(255,255,255,.64); max-width: 320px; }
 .conversation form { flex-wrap: wrap; }
 .conversation form .share-picker { order: 3; width: 100%; }
 .conversation form .share-picker .attached { margin: 0; }
 .conversation .share-menu { top: auto; bottom: calc(100% + 8px); }
+.conversation .message-composer { align-items: flex-end; }
+.message-composer > .mention-composer { flex: 1 1 0; min-width: 0; }
+.message-composer .mention-composer textarea { min-height: 44px; max-height: 120px; padding: 10px 12px; resize: vertical; color: var(--ink); -webkit-text-fill-color: var(--ink); }
+.message-composer .mention-draft-highlight-layer { padding: 11px 13px; }
+.message-composer .mention-suggestions { width: min(440px, calc(100vw - 48px)); }
 .avatar-editor { position: relative; width: max-content; }
 .avatar-trigger { display: block; border: 0; border-radius: 50%; background: transparent; padding: 0; }
 .avatar-trigger:focus-visible, .avatar-upload:focus-visible { outline: 3px solid #087456; outline-offset: 3px; }
@@ -993,6 +992,9 @@ button {
   .page {
     padding: 26px 16px 100px;
   }
+  .page:has(.messages) {
+    padding: 22px 12px 100px;
+  }
   .page-header h1 {
     font-size: 25px;
   }
@@ -1018,7 +1020,7 @@ button {
   .messages {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
-    height: 590px;
+    height: clamp(360px, calc(100dvh - 360px), 680px);
   }
   .messages aside {
     display: flex;
@@ -1108,7 +1110,7 @@ button {
   }
   .composer .mention-composer { grid-column: 2; }
   .message-bubble {
-    max-width: 88%;
+    max-width: min(88%, 680px);
   }
   .share-menu {
     width: min(360px, calc(100vw - 42px));
