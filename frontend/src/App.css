@@ -688,13 +688,19 @@ button {
 .music-platforms button.active { border-color: var(--green); background: #e8faf3; color: #087456; font-weight: 700; }
 .music-platforms a { color: #10251f; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 .mention-composer { position: relative; min-width: 0; }
-.mention-composer textarea { display: block; box-sizing: border-box; width: 100%; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; resize: vertical; font: inherit; outline-color: var(--green); }
+.mention-composer textarea { position: relative; z-index: 1; display: block; box-sizing: border-box; width: 100%; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; resize: vertical; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink); font: inherit; outline-color: var(--green); }
+.mention-composer textarea::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); opacity: 1; }
+.mention-draft-highlight-layer { position: absolute; z-index: 0; inset: 0; box-sizing: border-box; overflow: hidden; padding: 11px; color: var(--ink); font: inherit; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; pointer-events: none; }
+.mention-draft-highlight { color: #278b57; font-weight: 700; }
 .composer .mention-composer { grid-column: 2; }
 .composer .mention-composer textarea { border: 0; padding: 0; resize: vertical; }
-.mention-suggestions { position: absolute; z-index: 9; left: 0; bottom: calc(100% + 7px); width: min(320px, calc(100vw - 48px)); max-height: 230px; overflow: auto; border: 1px solid var(--line); border-radius: 11px; padding: 5px; background: #fff; box-shadow: 0 12px 30px rgba(24, 47, 39, .17); }
-.mention-suggestions button { display: flex; width: 100%; gap: 9px; align-items: center; border: 0; border-radius: 7px; padding: 9px; background: transparent; text-align: left; }
+.composer .mention-draft-highlight-layer { padding: 0; }
+.mention-suggestions { position: absolute; z-index: 9; top: calc(100% + 7px); left: 0; box-sizing: border-box; width: min(440px, calc(100vw - 48px)); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 13px; padding: 7px; background: #fff; box-shadow: 0 12px 30px rgba(24, 47, 39, .17); }
+.mention-suggestions button { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; min-height: 58px; border: 0; border-radius: 9px; padding: 11px 13px; background: transparent; text-align: left; }
 .mention-suggestions button:hover, .mention-suggestions button:focus-visible { background: #f0f7f3; }
-.mention-suggestions span { color: var(--muted); font-size: 12px; }
+.mention-suggestions b, .mention-suggestions span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mention-suggestions b { color: #278b57; font-size: 14px; }
+.mention-suggestions span { color: var(--muted); font-size: 13px; }
 .mention { color: #278b57; font-weight: 700; }
 .mention-toast { position: fixed; z-index: 12; top: 16px; right: 18px; display: flex; align-items: center; gap: 12px; width: min(360px, calc(100vw - 36px)); padding: 12px 14px; border: 1px solid #c6ead5; border-radius: 12px; background: #f0fff5; box-shadow: 0 12px 32px rgba(24, 47, 39, .18); color: #20392b; }
 .mention-toast p { flex: 1; margin: 0; font-size: 13px; line-height: 1.4; }
