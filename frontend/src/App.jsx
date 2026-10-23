@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { configured } from './lib/supabase'
 import { useSynq, useUnreadMessages } from './hooks/useSynq'
+import { useMentionNotifications } from './hooks/useMentionNotifications'
 import { Shell } from './components/Shell'
 import { SettingsErrorBoundary } from './components/SettingsErrorBoundary'
 import { Auth } from './pages/Auth'
@@ -22,7 +23,8 @@ function AppRoutes() {
     baseApp.user?.id,
     baseApp.preferences?.chat_notifications_enabled === true
   )
-  const app = { ...baseApp, ...unread }
+  const mentions = useMentionNotifications(baseApp.user?.id)
+  const app = { ...baseApp, ...unread, ...mentions }
   if (!app.ready) return <main className="callback">Carregando Harmony...</main>
   if (configured && !app.user) return <Auth />
   if (app.passwordRecovery && location.pathname !== '/redefinir-senha') {

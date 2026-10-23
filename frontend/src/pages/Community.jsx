@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Heart, MessageCircle, Send, ThumbsDown } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Bell, Heart, MessageCircle, Send, ThumbsDown } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
 import { MentionComposer, MentionText } from '../components/MentionComposer'
 
 export function Community({ app }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const markingNotifications = useRef(new Set())
   const [posts, setPosts] = useState([]),
     [content, setContent] = useState(''),
     [error, setError] = useState(''),
@@ -72,6 +76,49 @@ export function Community({ app }) {
         setProfiles(data || [])
       })
   }, [])
+  useEffect(() => {
+    const notificationId = new URLSearchParams(location.search).get('notificacao')
+    const notifications = app.mentionNotifications || []
+    const selectedNotification = notifications.find((item) => item.id === notificationId)
+    if (selectedNotification?.comment_id && !openReplies.has(selectedNotification.post_id)) {
+      setOpenReplies((current) => new Set(current).add(selectedNotification.post_id))
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.35) continue
+          const notification = notifications.find((item) => {
+            const targetId = item.comment_id ? `comment-${item.comment_id}` : `post-${item.post_id}`
+            return targetId === entry.target.id
+          })
+          if (!notification || markingNotifications.current.has(notification.id)) continue
+          markingNotifications.current.add(notification.id)
+          observer.unobserve(entry.target)
+          app.markMentionAsRead(notification.id)
+            .then(() => {
+              if (notification.id === notificationId) navigate('/comunidade', { replace: true })
+            })
+            .catch((readError) => {
+              markingNotifications.current.delete(notification.id)
+              setError(readError.message)
+            })
+        }
+      },
+      { threshold: [0.35] }
+    )
+    for (const notification of notifications) {
+      const targetId = notification.comment_id
+        ? `comment-${notification.comment_id}`
+        : `post-${notification.post_id}`
+      const target = document.getElementById(targetId)
+      if (!target) continue
+      observer.observe(target)
+      if (notification.id === notificationId) {
+        requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+      }
+    }
+    return () => observer.disconnect()
+  }, [app.mentionNotifications, app.markMentionAsRead, location.search, navigate, openReplies, posts])
   const publish = async (event) => {
     event.preventDefault()
     if (!content.trim() && !attachment) return
@@ -173,10 +220,39 @@ export function Community({ app }) {
           {error}
         </p>
       )}
+      {app.mentionNotificationError && (
+        <p className="form-error" role="alert">
+          {app.mentionNotificationError}
+        </p>
+      )}
+      {app.mentionNotifications?.length > 0 && (
+        <Section title="Menções">
+          <div className="mention-notifications">
+            {app.mentionNotifications.map((notification) => (
+              <button
+                className="mention-notification"
+                key={notification.id}
+                type="button"
+                onClick={() => navigate(`/comunidade?notificacao=${encodeURIComponent(notification.id)}`)}
+              >
+                <Bell size={18} />
+                <span>
+                  <b>{notification.actor?.display_name || 'Alguém'}</b>
+                  <small>
+                    {notification.kind === 'comment_mention'
+                      ? 'mencionou você em uma resposta'
+                      : 'mencionou você em uma publicação'}
+                  </small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
       <Section title="Feed">
         {posts.length ? (
           posts.map((post) => (
-            <article className="post" key={post.id}>
+            <article className="post" id={`post-${post.id}`} key={post.id}>
               <Avatar profile={post.author} />
               <div>
                 <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
@@ -217,7 +293,7 @@ export function Community({ app }) {
                 {openReplies.has(post.id) && (
                   <div className="post-replies">
                     {post.post_comments?.map((comment) => (
-                      <article className="post-reply" key={comment.id}>
+                      <article className="post-reply" id={`comment-${comment.id}`} key={comment.id}>
                         <Avatar profile={comment.author} />
                         <div>
                           <b>{comment.author?.display_name || 'Ouvinte Harmony'}</b>

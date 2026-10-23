@@ -695,7 +695,14 @@ button {
 .mention-suggestions button { display: flex; width: 100%; gap: 9px; align-items: center; border: 0; border-radius: 7px; padding: 9px; background: transparent; text-align: left; }
 .mention-suggestions button:hover, .mention-suggestions button:focus-visible { background: #f0f7f3; }
 .mention-suggestions span { color: var(--muted); font-size: 12px; }
-.mention { color: #087456; font-weight: 700; }
+.mention { color: #278b57; font-weight: 700; }
+.mention-toast { position: fixed; z-index: 12; top: 16px; right: 18px; display: flex; align-items: center; gap: 12px; width: min(360px, calc(100vw - 36px)); padding: 12px 14px; border: 1px solid #c6ead5; border-radius: 12px; background: #f0fff5; box-shadow: 0 12px 32px rgba(24, 47, 39, .18); color: #20392b; }
+.mention-toast p { flex: 1; margin: 0; font-size: 13px; line-height: 1.4; }
+.mention-toast button { flex: 0 0 auto; border: 0; border-radius: 8px; padding: 8px 10px; background: #d8f3e2; color: #17653c; font-weight: 700; }
+.mention-notifications { display: grid; gap: 8px; }
+.mention-notification { display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 13px; border: 1px solid #d9eddf; border-radius: 10px; background: #f5fff8; color: var(--ink); text-align: left; }
+.mention-notification > span { display: grid; gap: 3px; }
+.mention-notification small { color: var(--muted); }
 .post-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 .post-actions .like { padding: 5px 0; }
 .post-actions .disliked { color: #b23a56; }

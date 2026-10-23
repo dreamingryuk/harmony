@@ -49,6 +49,18 @@ create table public.post_dislikes (
   created_at timestamptz not null default now(),
   primary key(post_id, user_id)
 );
+create table public.community_notifications (
+  id uuid primary key default uuid_generate_v4(),
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  actor_id uuid not null references public.profiles(id) on delete cascade,
+  post_id uuid not null references public.posts(id) on delete cascade,
+  comment_id uuid references public.post_comments(id) on delete cascade,
+  kind text not null check (kind in ('post_mention', 'comment_mention')),
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  check (recipient_id <> actor_id),
+  check ((kind = 'post_mention' and comment_id is null) or (kind = 'comment_mention' and comment_id is not null))
+);
 create table public.messages (
   id uuid primary key default uuid_generate_v4(), sender_id uuid not null references public.profiles(id) on delete cascade,
   recipient_id uuid not null references public.profiles(id) on delete cascade, content text not null default '', track jsonb,
@@ -64,6 +76,7 @@ alter table public.playlists enable row level security; alter table public.playl
 alter table public.saved_tracks enable row level security; alter table public.posts enable row level security;
 alter table public.post_likes enable row level security; alter table public.messages enable row level security;
 alter table public.post_comments enable row level security; alter table public.post_dislikes enable row level security;
+alter table public.community_notifications enable row level security;
 alter table public.listening_events enable row level security;
 
 create policy "profiles are visible" on public.profiles for select using (true);
@@ -87,6 +100,13 @@ create policy "users delete own post comments" on public.post_comments for delet
 create policy "post dislikes are visible" on public.post_dislikes for select to authenticated using (true);
 create policy "users manage own post dislikes" on public.post_dislikes for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "users read own community notifications" on public.community_notifications for select to authenticated
+  using (recipient_id = auth.uid());
+create policy "users mark own community notifications read" on public.community_notifications for update to authenticated
+  using (recipient_id = auth.uid()) with check (recipient_id = auth.uid());
+revoke insert, update, delete on public.community_notifications from authenticated;
+grant select on public.community_notifications to authenticated;
+grant update (read_at) on public.community_notifications to authenticated;
 create policy "private messages" on public.messages for select using (sender_id = auth.uid() or recipient_id = auth.uid());
 create policy "send own messages" on public.messages for insert with check (sender_id = auth.uid());
 create policy "own listening history" on public.listening_events for all using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -94,4 +114,49 @@ create policy "own listening history" on public.listening_events for all using (
 create index listening_events_user_played on public.listening_events(user_id, played_at desc);
 create index messages_participants on public.messages(sender_id, recipient_id, created_at);
 create index post_comments_post_created on public.post_comments(post_id, created_at);
-alter publication supabase_realtime add table public.posts, public.post_likes, public.post_comments, public.post_dislikes, public.messages, public.follows, public.playlists;
+create unique index community_post_mention_once on public.community_notifications(recipient_id, post_id) where comment_id is null;
+create unique index community_comment_mention_once on public.community_notifications(recipient_id, comment_id) where comment_id is not null;
+create index community_notifications_recipient_unread on public.community_notifications(recipient_id, created_at desc) where read_at is null;
+
+create or replace function public.notify_community_mentions()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  mention_body text;
+  mention_name text;
+  target_post_id uuid;
+  target_comment_id uuid;
+  notification_kind text;
+begin
+  if tg_table_name = 'posts' then
+    mention_body := new.content;
+    target_post_id := new.id;
+    target_comment_id := null;
+    notification_kind := 'post_mention';
+  else
+    mention_body := new.content;
+    target_post_id := new.post_id;
+    target_comment_id := new.id;
+    notification_kind := 'comment_mention';
+  end if;
+  for mention_name in
+    select matched[2]
+    from regexp_matches(mention_body, '(^|[^[:alnum:]_])@([[:alnum:]_]{3,30})', 'g') as matched
+  loop
+    insert into public.community_notifications (recipient_id, actor_id, post_id, comment_id, kind)
+    select profile.id, new.author_id, target_post_id, target_comment_id, notification_kind
+    from public.profiles as profile
+    where lower(profile.username) = lower(mention_name) and profile.id <> new.author_id
+    on conflict do nothing;
+  end loop;
+  return new;
+end;
+$$;
+create trigger notify_post_mentions after insert on public.posts
+  for each row execute function public.notify_community_mentions();
+create trigger notify_comment_mentions after insert on public.post_comments
+  for each row execute function public.notify_community_mentions();
+alter publication supabase_realtime add table public.posts, public.post_likes, public.post_comments, public.post_dislikes, public.community_notifications, public.messages, public.follows, public.playlists;

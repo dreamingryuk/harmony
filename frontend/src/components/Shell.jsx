@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { ExternalLink, Home, Library as LibraryIcon, LogOut, MessageCircle, Music2, Play, Users, UserRound, BarChart3, Settings } from 'lucide-react'
+import { Bell, ExternalLink, Home, Library as LibraryIcon, LogOut, MessageCircle, Music2, Play, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { trackJson } from '../utils/track'
 import { Avatar, CoverArt } from './Media'
@@ -67,6 +67,25 @@ export function Shell({ app, children }) {
         </div>
       </aside>
       <main className="content">
+        {app.mentionNotifications?.[0] && (
+          <aside className="mention-toast" role="status">
+            <Bell size={19} />
+            <p>
+              <b>{app.mentionNotifications[0].actor?.display_name || 'Alguém'}</b>{' '}
+              {app.mentionNotifications[0].kind === 'comment_mention'
+                ? 'mencionou você em uma resposta.'
+                : 'mencionou você em uma publicação.'}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/comunidade?notificacao=${encodeURIComponent(app.mentionNotifications[0].id)}`)
+              }
+            >
+              Ver postagem
+            </button>
+          </aside>
+        )}
         {app.demo && (
           <div className="demo-banner">
             Modo demonstração: configure o Supabase para salvar e conversar de verdade.

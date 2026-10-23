@@ -13,7 +13,7 @@ O frontend acessa Supabase diretamente. O diretório `backend/` na raiz contém 
 ## Dados
 
 - `profiles`: perfil público. `account_preferences`: preferências privadas, protegidas por RLS.
-- `posts`, `post_likes`, `follows` e `messages`: recursos sociais.
+- `posts`, `post_likes`, `post_comments`, `post_dislikes`, `community_notifications`, `follows` e `messages`: recursos sociais. Menções em posts/respostas criam notificações via trigger no Supabase; a migration `community-interactions.sql` também habilita Realtime, e o aviso é removido quando a postagem fica visível para a pessoa mencionada.
 - `saved_tracks`, `playlists` e `playlist_tracks`: biblioteca e playlists do Harmony.
 - `listening_events`: reproduções detectadas pelo player integrado do YouTube. O player Spotify é incorporado por iframe e não expõe ao Harmony os eventos de reprodução; a retrospectiva não lê o histórico privado completo de nenhum serviço.
 
