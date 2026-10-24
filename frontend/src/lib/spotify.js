@@ -124,12 +124,24 @@ export function toTrack(track) {
     uri: track.uri,
     title: track.name,
     artists: track.artists?.map((artist) => artist.name).join(', ') || 'Artista desconhecido',
+    artistIds: (track.artists || []).map((artist) => artist.id).filter(Boolean),
     album: track.album?.name || '',
     coverUrl: track.album?.images?.find((image) => image?.url)?.url || FALLBACK_COVER,
     previewUrl: track.preview_url || '',
     spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
     externalUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
     genres: track.genres || [],
+  }
+}
+
+export function toArtist(artist) {
+  return {
+    id: artist.id,
+    name: artist.name,
+    image: artist.images?.find((image) => image?.url)?.url || '',
+    url: artist.external_urls?.spotify || `https://open.spotify.com/artist/${artist.id}`,
+    followers: artist.followers?.total ?? null,
+    genres: artist.genres || [],
   }
 }
 
@@ -156,4 +168,19 @@ export async function saveToSpotify(track) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uris: [track.uri] }),
   })
+}
+
+// Faixas em alta: a playlist "Today's Top Hits" funciona como termômetro do que
+// está tocando no Spotify agora.
+export async function spotifyPopularSongs(limit = 12) {
+  const tracks = await spotifyPlaylistTracks('37i9dQZF1DXcBWIGoYBM5M')
+  return tracks.slice(0, limit)
+}
+
+// Carrega até 8 artistas em uma única chamada (usado com as faixas em alta).
+export async function spotifyArtists(ids) {
+  const list = (Array.isArray(ids) ? ids : []).filter(Boolean).slice(0, 8)
+  if (!list.length) return []
+  const data = await spotifyFetch(`/artists?ids=${list.map(encodeURIComponent).join(',')}`)
+  return (data.artists || []).filter(Boolean).map(toArtist)
 }

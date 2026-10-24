@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, Music2, Play, SkipBack, SkipForward, Users, UserRound, BarChart3, Settings } from 'lucide-react'
+import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, Music2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { playNext, playPrevious, queueState, trackJson } from '../utils/track'
+import { nextLoopMode, playNext, playPrevious, queueState, setLoop, setShuffle, trackJson } from '../utils/track'
 import { Avatar, CoverArt } from './Media'
 import { AddToPlaylistDialog } from './PlaylistComponents'
 import { YouTubePlayer } from './YouTubePlayer'
@@ -129,7 +129,7 @@ export function Player({ app }) {
     [duration, setDuration] = useState(0),
     [playerError, setPlayerError] = useState(''),
     [playerApiUnavailable, setPlayerApiUnavailable] = useState(false),
-    [queueNav, setQueueNav] = useState({ canPrev: false, canNext: false }),
+    [queueNav, setQueueNav] = useState(() => queueState()),
     [showPlaylistPicker, setShowPlaylistPicker] = useState(false),
     [spotifyKey, setSpotifyKey] = useState(0)
   const youtubePlayer = useRef(null),
@@ -204,6 +204,18 @@ export function Player({ app }) {
     const isPlaying = state === youtubeStates?.PLAYING
     setPlaying(isPlaying)
     if (state === youtubeStates?.ENDED) {
+      // Repetir uma faixa: recomeça a mesma música antes de avançar a fila.
+      if (queueState().loop === 'one' && youtubePlayer.current) {
+        try {
+          youtubePlayer.current.seekTo(0, true)
+          youtubePlayer.current.playVideo()
+          setProgress(0)
+          setPlaying(true)
+          return
+        } catch (error) {
+          setPlayerError(error.message || 'Não foi possível repetir a faixa.')
+        }
+      }
       // Fim da faixa: segue para a próxima da fila, quando houver.
       if (playNext()) return
       setProgress(0)
@@ -257,6 +269,23 @@ export function Player({ app }) {
     if (track) playNext()
   }
 
+  const toggleShuffle = () => {
+    setShuffle(!queueNav.shuffle)
+    setQueueNav(queueState())
+  }
+
+  const cycleLoop = () => {
+    setLoop(nextLoopMode(queueNav.loop))
+    setQueueNav(queueState())
+  }
+
+  const loopLabel =
+    queueNav.loop === 'one'
+      ? 'Repetir esta faixa'
+      : queueNav.loop === 'all'
+        ? 'Repetir a fila inteira'
+        : 'Repetição desligada'
+
   if (!track) return null
   const isYoutube = track.platform === 'youtube' && track.youtubeId
   const percent = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0
@@ -299,6 +328,16 @@ export function Player({ app }) {
         <span>{track.artists}</span>
       </div>
       <div className="player-controls">
+        <button
+          type="button"
+          className={`icon player-mode ${queueNav.shuffle ? 'active' : ''}`}
+          onClick={toggleShuffle}
+          aria-pressed={Boolean(queueNav.shuffle)}
+          aria-label={queueNav.shuffle ? 'Desligar reprodução aleatória' : 'Ligar reprodução aleatória'}
+          title="Aleatório"
+        >
+          <Shuffle />
+        </button>
         <button type="button" className="icon player-skip" onClick={goPrevious} aria-label="Música anterior">
           <SkipBack fill="currentColor" />
         </button>
@@ -315,6 +354,16 @@ export function Player({ app }) {
           aria-label="Próxima música"
         >
           <SkipForward fill="currentColor" />
+        </button>
+        <button
+          type="button"
+          className={`icon player-mode ${queueNav.loop !== 'off' ? 'active' : ''}`}
+          onClick={cycleLoop}
+          aria-pressed={queueNav.loop !== 'off'}
+          aria-label={loopLabel}
+          title={loopLabel}
+        >
+          {queueNav.loop === 'one' ? <Repeat1 /> : <Repeat />}
         </button>
       </div>
       {isYoutube && !playerApiUnavailable ? (

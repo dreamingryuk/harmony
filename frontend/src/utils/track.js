@@ -1,4 +1,13 @@
-import { nextQueueTrack, previousQueueTrack, queueState, startQueue } from './queue'
+import {
+  isShuffleEnabled,
+  nextLoopMode,
+  nextQueueTrack,
+  previousQueueTrack,
+  queueState,
+  setLoop,
+  setShuffle,
+  startQueue,
+} from './queue'
 
 export const trackJson = (track) => ({
   platform: track.platform || 'spotify',
@@ -39,6 +48,18 @@ export const play = (track, tracks) => {
   window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
 }
 
+// Reproduz uma lista inteira começando pela primeira faixa. Com
+// `shuffle: true` o modo aleatório é ligado e a faixa inicial é sorteada.
+export const playAll = (tracks, options = {}) => {
+  const items = (Array.isArray(tracks) ? tracks : []).filter(Boolean)
+  if (!items.length) return false
+  if (typeof options.shuffle === 'boolean') setShuffle(options.shuffle)
+  const shuffled = typeof options.shuffle === 'boolean' ? options.shuffle : isShuffleEnabled()
+  const start = shuffled ? items[Math.floor(Math.random() * items.length)] : items[0]
+  play(start, items)
+  return true
+}
+
 export const playNext = () => {
   const track = nextQueueTrack()
   if (!track) return false
@@ -54,7 +75,7 @@ export const playPrevious = () => {
   return true
 }
 
-export { queueState }
+export { nextLoopMode, queueState, setLoop, setShuffle }
 
 export const isPlaylistAttachment = (attachment) => attachment?.type === 'playlist'
 

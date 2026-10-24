@@ -4,6 +4,7 @@ import { Bell, Heart, MessageCircle, Send, ThumbsDown } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
+import { loadPlaylist } from '../utils/playlist'
 import { MentionComposer, MentionText } from '../components/MentionComposer'
 
 export function Community({ app }) {
@@ -194,8 +195,8 @@ export function Community({ app }) {
   }
   const openPlaylist = async (id) => {
     if (!id) return
-    const { data, error: playlistError } = await supabase.from('playlists').select('*, playlist_tracks(*)').eq('id', id).maybeSingle()
-    if (playlistError || !data) return setError('Esta playlist não está mais pública ou foi removida.')
+    const data = await loadPlaylist(id)
+    if (!data) return setError('Esta playlist não está mais pública ou foi removida.')
     setOpenedPlaylist(data)
   }
   return (

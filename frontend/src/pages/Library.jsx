@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Music2, Pencil, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { spotifyPlaylists, spotifyPlaylistTracks } from '../lib/spotify'
 import { fromJson, trackJson } from '../utils/track'
+import { playPlaylist } from '../utils/playlist'
 import { CoverArt, Empty, Page, Section, TrackRow } from '../components/Media'
-import { PlaylistDialog } from '../components/PlaylistComponents'
+import { PlaylistCard, PlaylistDialog } from '../components/PlaylistComponents'
 
 export function Library({ app }) {
   const [playlists, setPlaylists] = useState([]),
@@ -85,7 +86,7 @@ export function Library({ app }) {
   }
   const savedQueue = saved.map((item) => fromJson(item.track)).filter(Boolean)
   return (
-    <Page title="Sua Biblioteca" subtitle="Suas músicas e coleções, do seu jeito.">
+    <Page title="Sua Biblioteca" subtitle="Suas playlists e favoritas, do seu jeito.">
       <div className="page-actions">
         <button className="primary" onClick={() => setEditor({})}>
           <Plus /> Nova playlist
@@ -110,6 +111,23 @@ export function Library({ app }) {
           ))}
         </Section>
       )}
+      <Section title={`Suas playlists${playlists.length ? ` (${playlists.length})` : ''}`}>
+        {playlists.length ? (
+          <div className="playlist-grid">
+            {playlists.map((item) => (
+              <PlaylistCard
+                key={item.id}
+                playlist={item}
+                onOpen={setEditor}
+                onEdit={setEditor}
+                onShuffle={(playlist) => playPlaylist(playlist, { shuffle: true })}
+              />
+            ))}
+          </div>
+        ) : (
+          <Empty text="Crie uma playlist ou importe uma do Spotify." />
+        )}
+      </Section>
       <Section title="Favoritas">
         {saved.length ? (
           saved.map((item) => (
@@ -118,21 +136,6 @@ export function Library({ app }) {
         ) : (
           <Empty text="Você ainda não favoritou nenhuma música." />
         )}
-      </Section>
-      <Section title="Suas playlists">
-        <div className="playlist-grid">
-          {playlists.map((item) => (
-            <button className="playlist-card" key={item.id} onClick={() => setEditor(item)}>
-              <div className="playlist-art">
-                <Music2 />
-              </div>
-              <b>{item.title}</b>
-              <span>{item.playlist_tracks?.length || 0} faixas · {item.is_public ? 'Pública' : 'Privada'}</span>
-              <i><Pencil /> Editar</i>
-            </button>
-          ))}
-          {!playlists.length && <Empty text="Crie uma playlist ou importe uma do Spotify." />}
-        </div>
       </Section>
       {editor && <PlaylistDialog playlist={editor.id ? editor : null} app={app} onClose={() => setEditor(null)} onSaved={load} />}
     </Page>

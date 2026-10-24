@@ -1,6 +1,7 @@
 import { FALLBACK_COVER } from './spotify'
 
 const YOUTUBE_API = 'https://www.googleapis.com/youtube/v3/search'
+const YOUTUBE_VIDEOS_API = 'https://www.googleapis.com/youtube/v3/videos'
 const YOUTUBE_PLAYER_API = 'https://www.youtube.com/iframe_api'
 const CONNECTION_PREFIX = 'harmony_youtube_enabled_'
 let playerApiPromise
@@ -26,7 +27,32 @@ export function disconnectYoutube(userId) {
   window.dispatchEvent(new Event('harmony-music-connections-changed'))
 }
 
-export async function searchYoutubeTracks(query) {
+const thumbnails = (snippet) =>
+  snippet?.thumbnails?.high?.url ||
+  snippet?.thumbnails?.medium?.url ||
+  snippet?.thumbnails?.default?.url ||
+  FALLBACK_COVER
+
+// Normaliza tanto resultados de busca quanto a lista de vídeos em alta.
+function toYoutubeTrack(item) {
+  const videoId = item?.id?.videoId || (typeof item?.id === 'string' ? item.id : null)
+  if (!videoId || !item.snippet) return null
+  return {
+    platform: 'youtube',
+    youtubeId: videoId,
+    spotifyId: `youtube:${videoId}`,
+    uri: `https://www.youtube.com/watch?v=${videoId}`,
+    title: item.snippet.title,
+    artists: item.snippet.channelTitle || 'YouTube',
+    album: 'YouTube Music',
+    coverUrl: thumbnails(item.snippet),
+    previewUrl: '',
+    externalUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    genres: [],
+  }
+}
+
+export async function searchYoutubeTracks(query, options = {}) {
   const key = youtubeApiKey()
   if (!key) throw new Error('A busca no YouTube não está configurada neste site.')
 
@@ -34,10 +60,12 @@ export async function searchYoutubeTracks(query) {
     part: 'snippet',
     type: 'video',
     videoEmbeddable: 'true',
-    maxResults: '10',
+    maxResults: String(options.limit || 10),
     q: `${query} music`,
     key,
   })
+  if (options.order) params.set('order', options.order)
+
   const response = await fetch(`${YOUTUBE_API}?${params}`)
   const result = await response.json()
   if (!response.ok) {
@@ -48,28 +76,33 @@ export async function searchYoutubeTracks(query) {
     throw new Error(result.error?.message || 'Não foi possível buscar no YouTube.')
   }
 
-  return (result.items || [])
-    .filter((item) => item.id?.videoId && item.snippet)
-    .map((item) => {
-      const videoId = item.id.videoId
-      return {
-        platform: 'youtube',
-        youtubeId: videoId,
-        spotifyId: `youtube:${videoId}`,
-        uri: `https://www.youtube.com/watch?v=${videoId}`,
-        title: item.snippet.title,
-        artists: item.snippet.channelTitle || 'YouTube',
-        album: 'YouTube Music',
-        coverUrl:
-          item.snippet.thumbnails?.high?.url ||
-          item.snippet.thumbnails?.medium?.url ||
-          item.snippet.thumbnails?.default?.url ||
-          FALLBACK_COVER,
-        previewUrl: '',
-        externalUrl: `https://www.youtube.com/watch?v=${videoId}`,
-        genres: [],
-      }
+  return (result.items || []).map(toYoutubeTrack).filter(Boolean)
+}
+
+// Os vídeos de música mais populares do momento (categoria "Música").
+// Se o gráfico não estiver disponível, cai para a busca mais vista.
+export async function youtubePopularTracks(limit = 12) {
+  const key = youtubeApiKey()
+  if (!key) throw new Error('A busca no YouTube não está configurada neste site.')
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet,contentDetails,chart',
+      chart: 'mostPopular',
+      videoCategoryId: '10',
+      regionCode: 'BR',
+      maxResults: String(limit),
+      key,
     })
+    const response = await fetch(`${YOUTUBE_VIDEOS_API}?${params}`)
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error?.message || 'Gráfico indisponível.')
+    const tracks = (result.items || []).map(toYoutubeTrack).filter(Boolean)
+    if (!tracks.length) throw new Error('Nenhum vídeo retornado.')
+    return tracks.slice(0, limit)
+  } catch {
+    return searchYoutubeTracks('top hits', { order: 'viewCount', limit })
+  }
 }
 
 export function loadYoutubePlayerApi() {

@@ -316,24 +316,43 @@ button {
 }
 .playlist-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-  gap: 13px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
 }
 .playlist-card {
   background: #fff;
   border: 1px solid var(--line);
-  padding: 12px;
+  padding: 11px;
   border-radius: 14px;
-  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   gap: 5px;
 }
+/* Títulos longos não podem empurrar o card para fora da coluna da grade. */
+.playlist-card > b,
+.playlist-card > span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playlist-card > b {
+  font-size: 14px;
+}
 .playlist-art {
-  height: 112px;
-  border-radius: 10px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 11px;
   background: linear-gradient(135deg, #6b35af, #19bd90);
   color: #fff;
   display: grid;
   place-items: center;
+  overflow: hidden;
   margin-bottom: 6px;
 }
 .playlist-art svg {
@@ -1331,4 +1350,237 @@ input[type='checkbox']:disabled {
   .player.spotify-player { height: auto; min-height: 92px; }
   /* O embed do Spotify ocupa a segunda linha e a navegação sobe junto. */
   .shell:has(.player.spotify-player) .bottom-nav { bottom: 142px; }
+}
+
+/* ===== Cards de playlist: capa, play e ações ===== */
+.playlist-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.playlist-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.playlist-play,
+.playlist-shuffle,
+.playlist-edit {
+  position: absolute;
+  z-index: 2;
+  border: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.playlist-play {
+  right: 8px;
+  bottom: 8px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(8, 44, 32, 0.38);
+}
+.playlist-play svg { width: 18px; }
+.playlist-shuffle {
+  left: 8px;
+  bottom: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #14513d;
+  box-shadow: 0 4px 12px rgba(8, 44, 32, 0.25);
+}
+.playlist-shuffle svg { width: 15px; }
+.playlist-edit {
+  left: 8px;
+  top: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #22423a;
+  box-shadow: 0 4px 12px rgba(8, 44, 32, 0.25);
+}
+.playlist-edit svg { width: 15px; }
+.playlist-play:disabled { opacity: 0 !important; pointer-events: none; }
+.playlist-shuffle:disabled,
+.playlist-edit:disabled { opacity: 0 !important; pointer-events: none; }
+.playlist-card:hover .playlist-play,
+.playlist-card:hover .playlist-shuffle,
+.playlist-card:hover .playlist-edit,
+.playlist-card:focus-within .playlist-play,
+.playlist-card:focus-within .playlist-shuffle,
+.playlist-card:focus-within .playlist-edit {
+  opacity: 1;
+  transform: none;
+}
+/* Dispositivos sem hover ficam com os botões sempre visíveis. */
+@media (hover: none) {
+  .playlist-play,
+  .playlist-shuffle,
+  .playlist-edit { opacity: 1; transform: none; }
+}
+
+/* ===== Cabeçalho de seção com controles (Descobrir) ===== */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+.section-head h2 { margin: 0; }
+.section-head p { margin: 0; }
+.chart-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.chart-controls button {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  padding: 7px 13px;
+  color: var(--muted);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chart-controls button.active {
+  border-color: var(--green);
+  background: #e8faf3;
+  color: #087456;
+  font-weight: 700;
+}
+.chart-controls button:disabled { opacity: 0.5; cursor: default; }
+.chart-controls .chart-refresh { padding: 7px; border-radius: 50%; }
+.chart-controls .chart-refresh svg { width: 16px; }
+.chart-controls button:not(.active):not(:disabled):hover { border-color: var(--green); color: #087456; }
+
+/* ===== Artistas em alta ===== */
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  gap: 14px;
+}
+.artist-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 14px;
+  padding: 13px 10px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+  color: var(--ink);
+}
+.artist-card:hover { border-color: var(--green); transform: translateY(-1px); }
+.artist-avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #eaf1ee;
+  display: block;
+}
+.artist-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.artist-card b,
+.artist-card small {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artist-card b { font-size: 14px; margin-top: 7px; }
+.artist-card small { color: var(--muted); font-size: 12px; }
+
+/* ===== Modal da playlist: reordenar faixas e ações ===== */
+.modal-track .track-position {
+  flex: 0 0 auto;
+  display: block;
+  width: 22px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.modal-track .modal-track-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.modal-track .track-order {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.modal-track .track-order .icon { padding: 5px; }
+.modal-track .track-order .icon svg { width: 16px; }
+.modal-track .track-order .icon:disabled { opacity: 0.3; cursor: default; }
+.playlist-view-actions { flex-wrap: wrap; }
+.playlist-view-actions .primary,
+.playlist-view-actions .secondary { flex: 1 1 auto; }
+
+/* ===== Anexo de playlist com botão de play ===== */
+.attachment .attachment-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+.attachment .attachment-body > span:not(.playlist-art) {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.attachment .attachment-play {
+  flex: 0 0 auto;
+  color: var(--green);
+  background: #e8faf3;
+  border-radius: 50%;
+}
+.attachment .attachment-play:disabled { opacity: 0.5; }
+.attachment .attachment-play:hover { background: #d5f5e8; }
+
+/* ===== Player: aleatório e repetição ===== */
+.player-mode.active {
+  color: var(--green);
+  background: #e8faf3;
+}
+.player-mode.active:hover { background: #d5f5e8; color: #087456; }
+
+@media (max-width: 800px) {
+  .playlist-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 11px; }
+  .playlist-play { width: 38px; height: 38px; }
+  .section-head { align-items: flex-start; }
+  .chart-controls { width: 100%; }
+  .artist-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 11px; }
+  .artist-avatar { width: 64px; height: 64px; }
+  .modal-track .track-order { margin-left: 0; }
+  .playlist-view-actions .primary,
+  .playlist-view-actions .secondary { flex: 1 1 45%; padding: 10px 12px; font-size: 13px; }
 }
