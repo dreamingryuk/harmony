@@ -83,6 +83,7 @@ export function Library({ app }) {
       setLoading(false)
     }
   }
+  const savedQueue = saved.map((item) => fromJson(item.track)).filter(Boolean)
   return (
     <Page title="Sua Biblioteca" subtitle="Suas músicas e coleções, do seu jeito.">
       <div className="page-actions">
@@ -112,7 +113,7 @@ export function Library({ app }) {
       <Section title="Favoritas">
         {saved.length ? (
           saved.map((item) => (
-            <TrackRow key={item.id} track={fromJson(item.track)} saved onToggleSave={toggle} />
+            <TrackRow key={item.id} track={fromJson(item.track)} queue={savedQueue} saved onToggleSave={toggle} />
           ))
         ) : (
           <Empty text="Você ainda não favoritou nenhuma música." />

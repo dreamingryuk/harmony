@@ -165,7 +165,7 @@ export function Discover({ app }) {
       </form>
       <Section title={results.length ? 'Resultados da busca' : 'Em alta no Harmony'}>
         {(results.length ? results : featured).map((track) => (
-          <TrackRow key={track.spotifyId} track={track} />
+          <TrackRow key={track.spotifyId} track={track} queue={results.length ? results : featured} />
         ))}
       </Section>
       <section className="embed-grid">

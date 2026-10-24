@@ -44,7 +44,9 @@ export function useUnreadMessages(userId, notificationsEnabled) {
 }
 
 export function useSynq() {
-  const [user, setUser] = useState(null),
+  // Sem Supabase configurado o app entra em modo demo: o usuário precisa
+  // existir já na primeira renderização, antes do efeito preencher o estado.
+  const [user, setUser] = useState(() => (configured ? null : demoUser)),
     [profile, setProfile] = useState(null),
     [preferences, setPreferences] = useState(null),
     [passwordRecovery, setPasswordRecovery] = useState(false),

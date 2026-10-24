@@ -1,4 +1,4 @@
-
+import { nextQueueTrack, previousQueueTrack, queueState, startQueue } from './queue'
 
 export const trackJson = (track) => ({
   platform: track.platform || 'spotify',
@@ -31,7 +31,30 @@ export const fromJson = (track) =>
     genres: track.genres || [],
   }
 
-export const play = (track) => window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+// Toca uma faixa. Quando a lista de origem é informada, ela vira a fila do
+// player para que os botões de próxima/anterior naveguem nela.
+export const play = (track, tracks) => {
+  if (!track) return
+  startQueue(tracks, track)
+  window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+}
+
+export const playNext = () => {
+  const track = nextQueueTrack()
+  if (!track) return false
+  window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+  return true
+}
+
+// Retorna false quando não há faixa anterior: quem chama reinicia a atual.
+export const playPrevious = () => {
+  const track = previousQueueTrack()
+  if (!track) return false
+  window.dispatchEvent(new CustomEvent('synq-play', { detail: track }))
+  return true
+}
+
+export { queueState }
 
 export const isPlaylistAttachment = (attachment) => attachment?.type === 'playlist'
 

@@ -37,7 +37,7 @@ export function Avatar({ profile, className = '' }) {
   return <span className={`avatar ${className}`}>{initials(profile?.display_name)}</span>
 }
 
-export function TrackRow({ track, saved, onToggleSave }) {
+export function TrackRow({ track, saved, onToggleSave, queue }) {
   const [saving, setSaving] = useState(false)
   const spotifySave = async () => {
     try {
@@ -53,13 +53,13 @@ export function TrackRow({ track, saved, onToggleSave }) {
   return (
     <article className="track-row">
       <CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} />
-      <button className="track-copy" onClick={() => play(track)}>
+      <button className="track-copy" onClick={() => play(track, queue)}>
         <b>{track.title}</b>
         <span>
           {track.artists} · {track.album}
         </span>
       </button>
-      <button className="icon" onClick={() => play(track)}>
+      <button className="icon" onClick={() => play(track, queue)}>
         <Play />
       </button>
       {onToggleSave && (

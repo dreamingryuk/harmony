@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, Home, Library as LibraryIcon, LogOut, MessageCircle, Music2, Play, Users, UserRound, BarChart3, Settings } from 'lucide-react'
+import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, Music2, Play, SkipBack, SkipForward, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { trackJson } from '../utils/track'
+import { playNext, playPrevious, queueState, trackJson } from '../utils/track'
 import { Avatar, CoverArt } from './Media'
+import { AddToPlaylistDialog } from './PlaylistComponents'
 import { YouTubePlayer } from './YouTubePlayer'
+
+const formatTime = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.floor(seconds % 60)
+  return `${minutes}:${String(rest).padStart(2, '0')}`
+}
+
+const trackKey = (track) => track?.youtubeId || track?.spotifyId
 
 const nav = [
   ['/', 'Descobrir', Home],
@@ -118,15 +128,39 @@ export function Player({ app }) {
     [progress, setProgress] = useState(0),
     [duration, setDuration] = useState(0),
     [playerError, setPlayerError] = useState(''),
-    [playerApiUnavailable, setPlayerApiUnavailable] = useState(false)
+    [playerApiUnavailable, setPlayerApiUnavailable] = useState(false),
+    [queueNav, setQueueNav] = useState({ canPrev: false, canNext: false }),
+    [showPlaylistPicker, setShowPlaylistPicker] = useState(false),
+    [spotifyKey, setSpotifyKey] = useState(0)
   const youtubePlayer = useRef(null),
     playRequested = useRef(false),
-    logged = useRef(new Set())
+    logged = useRef(new Set()),
+    activeTrack = useRef(null)
   useEffect(() => {
     const listener = (event) => {
+      const next = event.detail
+      const nextKey = trackKey(next)
+      const isSameTrack = Boolean(nextKey && nextKey === trackKey(activeTrack.current))
+      activeTrack.current = next
+      setQueueNav(queueState())
+      // Escolher de novo a faixa que já está no player apenas retoma a reprodução.
+      if (isSameTrack) {
+        if (youtubePlayer.current) {
+          try {
+            youtubePlayer.current.playVideo()
+            setPlaying(true)
+            setPlayerError('')
+          } catch (error) {
+            setPlayerError(error.message || 'Não foi possível iniciar a reprodução.')
+          }
+        } else {
+          playRequested.current = true
+        }
+        return
+      }
       youtubePlayer.current = null
-      playRequested.current = false
-      setTrack(event.detail)
+      playRequested.current = true
+      setTrack(next)
       setPlaying(false)
       setProgress(0)
       setDuration(0)
@@ -170,7 +204,10 @@ export function Player({ app }) {
     const isPlaying = state === youtubeStates?.PLAYING
     setPlaying(isPlaying)
     if (state === youtubeStates?.ENDED) {
+      // Fim da faixa: segue para a próxima da fila, quando houver.
+      if (playNext()) return
       setProgress(0)
+      setPlaying(false)
       return
     }
     if (isPlaying && track) logPlayback(track)
@@ -193,67 +230,127 @@ export function Player({ app }) {
       setPlayerError(error.message || 'Não foi possível controlar a reprodução.')
     }
   }
+  const goPrevious = () => {
+    if (!track) return
+    if (playPrevious()) return
+    try {
+      if (track.platform === 'youtube' && track.youtubeId) {
+        if (!youtubePlayer.current) {
+          playRequested.current = true
+          return
+        }
+        youtubePlayer.current.seekTo(0, true)
+        youtubePlayer.current.playVideo()
+        setProgress(0)
+        setPlaying(true)
+        setPlayerError('')
+      } else {
+        // O Spotify toca por iframe: recarregar é como reiniciar a faixa.
+        setSpotifyKey((key) => key + 1)
+      }
+    } catch (error) {
+      setPlayerError(error.message || 'Não foi possível reiniciar a faixa.')
+    }
+  }
+
+  const goNext = () => {
+    if (track) playNext()
+  }
+
   if (!track) return null
   const isYoutube = track.platform === 'youtube' && track.youtubeId
+  const percent = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0
   return (
     <footer className={`player ${isYoutube ? 'youtube-player' : 'spotify-player'}`}>
-      {isYoutube ? (
-        <YouTubePlayer
-          key={track.youtubeId}
-          videoId={track.youtubeId}
-          onReady={handleYoutubeReady}
-          onStateChange={handleYoutubeState}
-          onApiUnavailable={setPlayerApiUnavailable}
-          onProgress={(current, total) => {
-            setProgress(current)
-            setDuration(total)
-          }}
-          onError={(error) => {
-            const messages = {
-              101: 'Este vídeo não permite reprodução incorporada.',
-              150: 'Este vídeo não permite reprodução incorporada.',
-              5: 'O YouTube não conseguiu reproduzir este vídeo.',
-              153: 'O YouTube não confirmou a origem do player. Verifique as restrições do domínio ou abra a faixa diretamente no YouTube.',
-            }
-            setPlayerError(
-              messages[error] ||
-                error ||
-                'Não foi possível carregar os controles do YouTube. Tente reproduzir pelo vídeo incorporado.'
-            )
-            setPlaying(false)
-          }}
-        />
-      ) : (
-        <CoverArt src={track.coverUrl} />
-      )}
+      <div className="player-media">
+        {isYoutube && (
+          <div className="player-audio">
+            <YouTubePlayer
+              key={track.youtubeId}
+              videoId={track.youtubeId}
+              onReady={handleYoutubeReady}
+              onStateChange={handleYoutubeState}
+              onApiUnavailable={setPlayerApiUnavailable}
+              onProgress={(current, total) => {
+                setProgress(current)
+                setDuration(total)
+              }}
+              onError={(error) => {
+                const messages = {
+                  101: 'Este vídeo não permite reprodução incorporada.',
+                  150: 'Este vídeo não permite reprodução incorporada.',
+                  5: 'O YouTube não conseguiu reproduzir este vídeo.',
+                  153: 'O YouTube não confirmou a origem do player. Verifique as restrições do domínio ou abra a faixa diretamente no YouTube.',
+                }
+                setPlayerError(
+                  messages[error] ||
+                    error ||
+                    'Não foi possível carregar os controles do YouTube. Tente abrir a faixa no YouTube.'
+                )
+                setPlaying(false)
+              }}
+            />
+          </div>
+        )}
+        <CoverArt className="player-cover" src={track.coverUrl} alt={`Capa de ${track.album || track.title}`} />
+      </div>
       <div className="player-track">
         <b>{track.title}</b>
         <span>{track.artists}</span>
       </div>
-      {isYoutube ? (
-        <>
-          {!playerApiUnavailable && (
-            <>
-              <button className="play" onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproduzir'}>
-                {playing ? 'Ⅱ' : <Play fill="currentColor" />}
-              </button>
-              <input
-                aria-label="Progresso"
-                className="progress"
-                type="range"
-                min="0"
-                max={duration || 1}
-                value={Math.min(progress, duration || 1)}
-                onChange={(event) => {
-                  youtubePlayer.current?.seekTo(Number(event.target.value), true)
-                  setProgress(Number(event.target.value))
-                }}
-              />
-            </>
-          )}
-        </>
+      <div className="player-controls">
+        <button type="button" className="icon player-skip" onClick={goPrevious} aria-label="Música anterior">
+          <SkipBack fill="currentColor" />
+        </button>
+        {isYoutube && !playerApiUnavailable && (
+          <button type="button" className="play" onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproduzir'}>
+            {playing ? 'Ⅱ' : <Play fill="currentColor" />}
+          </button>
+        )}
+        <button
+          type="button"
+          className="icon player-skip"
+          onClick={goNext}
+          disabled={!queueNav.canNext}
+          aria-label="Próxima música"
+        >
+          <SkipForward fill="currentColor" />
+        </button>
+      </div>
+      {isYoutube && !playerApiUnavailable ? (
+        <div className="player-progress">
+          <span className="player-time">{formatTime(progress)}</span>
+          <input
+            aria-label="Progresso"
+            className="progress"
+            type="range"
+            min="0"
+            max={duration || 1}
+            step="1"
+            value={Math.min(progress, duration || 1)}
+            style={{ '--progress': `${percent}%` }}
+            onChange={(event) => {
+              const value = Number(event.target.value)
+              youtubePlayer.current?.seekTo(value, true)
+              setProgress(value)
+            }}
+          />
+          <span className="player-time">{formatTime(duration)}</span>
+        </div>
+      ) : isYoutube ? (
+        <a
+          className="player-hint"
+          title="Não foi possível carregar os controles do YouTube."
+          aria-label="Abrir no YouTube"
+          href={track.externalUrl || track.spotifyUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Abrir no YouTube
+        </a>
       ) : (
         <iframe
+          key={spotifyKey}
           className="spotify-embed"
           title={`Reproduzir ${track.title} no Spotify`}
           src={`https://open.spotify.com/embed/track/${encodeURIComponent(track.spotifyId)}?utm_source=generator&theme=0`}
@@ -262,14 +359,26 @@ export function Player({ app }) {
         />
       )}
       {playerError && <span className="player-error" role="status">{playerError}</span>}
+      <button
+        type="button"
+        className="icon player-add"
+        onClick={() => setShowPlaylistPicker(true)}
+        aria-label="Adicionar à playlist"
+        title="Adicionar à playlist"
+      >
+        <ListMusic />
+      </button>
       <a
+        className="player-external"
         title={isYoutube ? 'Abrir no YouTube' : 'Abrir no Spotify'}
+        aria-label={isYoutube ? 'Abrir no YouTube' : 'Abrir no Spotify'}
         href={track.externalUrl || track.spotifyUrl}
         target="_blank"
         rel="noreferrer"
       >
         <ExternalLink />
       </a>
+      {showPlaylistPicker && <AddToPlaylistDialog track={track} app={app} onClose={() => setShowPlaylistPicker(false)} />}
     </footer>
   )
 }
