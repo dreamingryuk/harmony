@@ -4,6 +4,7 @@ import { Check, Heart, MessageCircle, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { ProfilePopup } from '../components/ProfilePopup'
+import { avisoDeMigracao, tabelaDeAmizadeAusente } from '../utils/friendship'
 
 const kinds = {
   post_like: ['curtiu sua publicação.', Heart],
@@ -38,7 +39,12 @@ export function Notifications({ app }) {
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
     if (queryError) {
-      setError(`Não foi possível carregar convites: ${queryError.message}`)
+      setInvites([])
+      setError(
+        tabelaDeAmizadeAusente(queryError)
+          ? avisoDeMigracao
+          : `Não foi possível carregar convites: ${queryError.message}`
+      )
       return
     }
     const rows = data || []
@@ -94,7 +100,11 @@ export function Notifications({ app }) {
       await loadInvites()
       if (accept) window.dispatchEvent(new CustomEvent('synq-friends-changed'))
     } catch (err) {
-      setError(`Não foi possível responder ao convite: ${err.message}`)
+      setError(
+        tabelaDeAmizadeAusente(err)
+          ? avisoDeMigracao
+          : `Não foi possível responder ao convite: ${err.message}`
+      )
     } finally {
       setBusy('')
     }

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Bell, Send, UserPlus } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
 import { MentionComposer, MentionText } from '../components/MentionComposer'
 import { ProfilePopup } from '../components/ProfilePopup'
+import { avisoDeMigracao, tabelaDeAmizadeAusente } from '../utils/friendship'
 
 export function Messages({ app }) {
   const userId = app.user.id
@@ -21,6 +22,8 @@ export function Messages({ app }) {
     [invite, setInvite] = useState(null),
     [inviteBusy, setInviteBusy] = useState(false),
     [search, setSearch] = useState(''),
+    [friendshipError, setFriendshipError] = useState(''),
+    [contactIds, setContactIds] = useState([]),
     [profilePopup, setProfilePopup] = useState(null)
   const chatRef = useRef(null)
 
@@ -41,13 +44,41 @@ export function Messages({ app }) {
       .select('id, requester_id, addressee_id, status, created_at')
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
       .order('created_at', { ascending: false })
-      .then(({ data }) => setFriendships(data || []))
-      .catch(() => setFriendships([]))
+      .then(({ data, error }) => {
+        if (error) throw error
+        setFriendshipError('')
+        setFriendships(data || [])
+      })
+      .catch((error) => {
+        setFriendships([])
+        setFriendshipError(
+          tabelaDeAmizadeAusente(error)
+            ? avisoDeMigracao
+            : `Não foi possível carregar as amizades: ${error.message}`
+        )
+      })
   }, [userId])
 
   useEffect(() => {
     loadFriendships()
   }, [loadFriendships])
+
+  // Conversas antigas continuam aparecendo mesmo antes da amizade.
+  useEffect(() => {
+    if (!configured) return undefined
+    supabase
+      .from('messages')
+      .select('sender_id, recipient_id, created_at')
+      .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const ids = [...new Set((data || []).map((message) =>
+          message.sender_id === userId ? message.recipient_id : message.sender_id
+        ))].filter(Boolean)
+        setContactIds(ids)
+      })
+      .catch(() => setContactIds([]))
+  }, [userId])
 
   const friends = friendships
     .filter((friendship) => friendship.status === 'accepted')
@@ -56,6 +87,17 @@ export function Messages({ app }) {
       return profiles.find((profile) => profile.id === otherId)
     })
     .filter(Boolean)
+
+  const friendIds = new Set(friends.map((profile) => profile.id))
+  const groups = [
+    { title: 'Amigos', people: friends },
+    {
+      title: 'Recentes',
+      people: contactIds
+        .map((id) => profiles.find((profile) => profile.id === id))
+        .filter((profile) => profile && !friendIds.has(profile.id)),
+    },
+  ].filter((group) => group.people.length)
 
   useEffect(() => {
     const syncProfile = (event) => {
@@ -157,7 +199,12 @@ export function Messages({ app }) {
       await loadFriendships()
       setInvite({ text: `Convite enviado.`, error: false, person })
     } catch (error) {
-      setInvite({ text: `Não foi possível enviar o convite: ${error.message}`, error: true })
+      setInvite({
+        text: tabelaDeAmizadeAusente(error)
+          ? avisoDeMigracao
+          : `Não foi possível enviar o convite: ${error.message}`,
+        error: true,
+      })
     } finally {
       setInviteBusy(false)
     }
@@ -203,6 +250,11 @@ export function Messages({ app }) {
               <UserPlus /> {inviteBusy ? 'Buscando...' : 'Adicionar'}
             </button>
           </form>
+          {friendshipError && (
+            <p className="friend-notice form-error" role="alert">
+              {friendshipError}
+            </p>
+          )}
           {invite && (
             <p className={`friend-notice ${invite.error ? 'form-error' : 'hint'}`} role="status">
               {invite.text}
@@ -213,17 +265,21 @@ export function Messages({ app }) {
               )}
             </p>
           )}
-          <p className="aside-label">Amigos</p>
-          {friends.length ? (
-            friends.map((profile) => (
-              <button
-                onClick={() => setSelected(profile)}
-                className={selected?.id === profile.id ? 'active' : ''}
-                key={profile.id}
-              >
-                <Avatar profile={profile} />
-                <span>{profile.display_name}{app.unreadSenders?.has(profile.id) && <i className="unread-dot" />}</span>
-              </button>
+          {groups.length ? (
+            groups.map((group) => (
+              <Fragment key={group.title}>
+                <p className="aside-label">{group.title}</p>
+                {group.people.map((profile) => (
+                  <button
+                    onClick={() => setSelected(profile)}
+                    className={selected?.id === profile.id ? 'active' : ''}
+                    key={profile.id}
+                  >
+                    <Avatar profile={profile} />
+                    <span>{profile.display_name}{app.unreadSenders?.has(profile.id) && <i className="unread-dot" />}</span>
+                  </button>
+                ))}
+              </Fragment>
             ))
           ) : (
             <Empty text="Adicione alguém pelo apelido público para começar a conversar." />
