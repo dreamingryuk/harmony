@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Heart, Music2, Play } from 'lucide-react'
 import { saveToSpotify, FALLBACK_COVER } from '../lib/spotify'
 import { play } from '../utils/track'
@@ -26,11 +26,19 @@ export function CoverArt({ src, alt = '', className }) {
 }
 
 export function Avatar({ profile, className = '' }) {
-  if (profile?.avatar_url) {
+  const [fotoQuebrada, setFotoQuebrada] = useState(false)
+  const foto = profile?.avatar_url
+  // Uma foto que não carrega volta ao estado normal quando o perfil muda.
+  useEffect(() => setFotoQuebrada(false), [foto])
+  if (foto && !fotoQuebrada) {
     return (
       <span className={`avatar avatar-image ${className}`}>
         {initials(profile.display_name)}
-        <img src={profile.avatar_url} alt={`Foto de ${profile.display_name || 'usuário'}`} onError={(event) => event.currentTarget.remove()} />
+        <img
+          src={foto}
+          alt={`Foto de ${profile.display_name || 'usuário'}`}
+          onError={() => setFotoQuebrada(true)}
+        />
       </span>
     )
   }

@@ -6,6 +6,10 @@ import { Avatar, Empty, Page, Section } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
 import { loadPlaylist } from '../utils/playlist'
 import { MentionComposer, MentionText } from '../components/MentionComposer'
+import { ProfilePopup } from '../components/ProfilePopup'
+
+const isMention = (notification) =>
+  notification.kind === 'post_mention' || notification.kind === 'comment_mention'
 
 export function Community({ app }) {
   const location = useLocation()
@@ -20,7 +24,8 @@ export function Community({ app }) {
     [openedPlaylist, setOpenedPlaylist] = useState(null),
     [profiles, setProfiles] = useState([]),
     [openReplies, setOpenReplies] = useState(new Set()),
-    [replyDrafts, setReplyDrafts] = useState({})
+    [replyDrafts, setReplyDrafts] = useState({}),
+    [profilePopup, setProfilePopup] = useState(null)
   const load = useCallback(async () => {
     if (!configured) return
     const { data, error: queryError } = await supabase
@@ -209,7 +214,7 @@ export function Community({ app }) {
           profiles={profiles}
           onChange={setContent}
           rows={3}
-          placeholder="Compartilhe algo... Digite @ para mencionar alguém"
+          placeholder="Compartilhe algo ou anexe só uma música. Digite @ para mencionar"
         />
         <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />
         <button className="primary" disabled={publishing}>
@@ -226,10 +231,10 @@ export function Community({ app }) {
           {app.mentionNotificationError}
         </p>
       )}
-      {app.mentionNotifications?.length > 0 && (
+      {app.mentionNotifications?.filter(isMention).length > 0 && (
         <Section title="Menções">
           <div className="mention-notifications">
-            {app.mentionNotifications.map((notification) => (
+            {app.mentionNotifications.filter(isMention).map((notification) => (
               <button
                 className="mention-notification"
                 key={notification.id}
@@ -254,11 +259,28 @@ export function Community({ app }) {
         {posts.length ? (
           posts.map((post) => (
             <article className="post" id={`post-${post.id}`} key={post.id}>
-              <Avatar profile={post.author} />
+              <button
+                type="button"
+                className="avatar-link"
+                aria-label={`Ver perfil de ${post.author?.display_name || 'Ouvinte Harmony'}`}
+                onClick={() => setProfilePopup(post.author)}
+              >
+                <Avatar profile={post.author} />
+              </button>
               <div>
-                <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
+                <button
+                  type="button"
+                  className="name-link"
+                  onClick={() => setProfilePopup(post.author)}
+                >
+                  <b>{post.author?.display_name || 'Ouvinte Harmony'}</b>
+                </button>
                 <small>{new Date(post.created_at).toLocaleString('pt-BR')}</small>
-                <p><MentionText text={post.content} profiles={profiles} /></p>
+                {post.content?.trim() && (
+                  <p>
+                    <MentionText text={post.content} profiles={profiles} />
+                  </p>
+                )}
                 {post.track && <AttachmentCard attachment={post.track} onOpenPlaylist={openPlaylist} />}
                 <div className="post-actions">
                   <button
@@ -295,9 +317,22 @@ export function Community({ app }) {
                   <div className="post-replies">
                     {post.post_comments?.map((comment) => (
                       <article className="post-reply" id={`comment-${comment.id}`} key={comment.id}>
-                        <Avatar profile={comment.author} />
+                        <button
+                          type="button"
+                          className="avatar-link"
+                          aria-label={`Ver perfil de ${comment.author?.display_name || 'Ouvinte Harmony'}`}
+                          onClick={() => setProfilePopup(comment.author)}
+                        >
+                          <Avatar profile={comment.author} />
+                        </button>
                         <div>
-                          <b>{comment.author?.display_name || 'Ouvinte Harmony'}</b>
+                          <button
+                            type="button"
+                            className="name-link"
+                            onClick={() => setProfilePopup(comment.author)}
+                          >
+                            <b>{comment.author?.display_name || 'Ouvinte Harmony'}</b>
+                          </button>
                           {comment.author?.username && <small>@{comment.author.username}</small>}
                           <p><MentionText text={comment.content} profiles={profiles} /></p>
                         </div>
@@ -324,6 +359,7 @@ export function Community({ app }) {
         )}
       </Section>
       {openedPlaylist && <PlaylistDialog playlist={openedPlaylist} app={app} readOnly onClose={() => setOpenedPlaylist(null)} onSaved={() => {}} />}
+      {profilePopup && <ProfilePopup profile={profilePopup} onClose={() => setProfilePopup(null)} />}
     </Page>
   )
 }

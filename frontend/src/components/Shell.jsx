@@ -22,10 +22,19 @@ const nav = [
   ['/biblioteca', 'Biblioteca', LibraryIcon, 'Biblioteca'],
   ['/comunidade', 'Comunidade', Users, 'Comunidade'],
   ['/mensagens', 'Mensagens', MessageCircle, 'Mensagens'],
+  ['/notificacoes', 'Notificações', Bell, 'Avisos'],
   ['/retrospectiva', 'Retrospectiva', BarChart3, 'Resumo'],
   ['/perfil', 'Perfil', UserRound, 'Perfil'],
   ['/configuracoes', 'Configurações', Settings, 'Ajustes'],
 ]
+
+// O que aconteceu na notificação mais recente.
+const toastText = (notification) => {
+  if (notification.kind === 'post_like') return 'curtiu sua publicação.'
+  if (notification.kind === 'comment_reply') return 'respondeu em uma publicação que você acompanha.'
+  if (notification.kind === 'comment_mention') return 'mencionou você em uma resposta.'
+  return 'mencionou você em uma publicação.'
+}
 
 export function Shell({ app, children }) {
   const location = useLocation()
@@ -65,6 +74,14 @@ export function Shell({ app, children }) {
                   {app.unreadCount > 99 ? '99+' : app.unreadCount}
                 </span>
               )}
+              {to === '/notificacoes' && app.mentionNotifications?.length > 0 && (
+                <span
+                  className="nav-badge"
+                  aria-label={`${app.mentionNotifications.length} notificações não lidas`}
+                >
+                  {app.mentionNotifications.length > 99 ? '99+' : app.mentionNotifications.length}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -85,9 +102,7 @@ export function Shell({ app, children }) {
             <Bell size={19} />
             <p>
               <b>{app.mentionNotifications[0].actor?.display_name || 'Alguém'}</b>{' '}
-              {app.mentionNotifications[0].kind === 'comment_mention'
-                ? 'mencionou você em uma resposta.'
-                : 'mencionou você em uma publicação.'}
+              {toastText(app.mentionNotifications[0])}
             </p>
             <button
               type="button"
@@ -121,6 +136,9 @@ export function Shell({ app, children }) {
               <span className="nav-short">{short}</span>
             </span>
             {to === '/mensagens' && app.unreadCount > 0 && <i className="nav-dot" />}
+            {to === '/notificacoes' && app.mentionNotifications?.length > 0 && (
+              <i className="nav-dot" />
+            )}
           </NavLink>
         ))}
       </nav>

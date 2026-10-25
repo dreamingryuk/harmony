@@ -581,21 +581,84 @@ button {
   border-radius: 4px;
 }
 .profile-hero {
-  background: linear-gradient(120deg, #152d26, #264b40);
-  color: #fff;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--deep);
   border-radius: 17px;
-  padding: 28px;
+  padding: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  overflow: hidden;
+  margin-top: 25px;
+}
+.profile-banner {
+  height: 150px;
+  background-color: var(--green);
+  background-size: cover;
+  background-position: center;
+}
+.profile-identity {
   display: flex;
   gap: 17px;
+  align-items: flex-start;
+  padding: 0 28px;
+  margin-top: 18px;
+}
+.profile-identity h2 {
+  margin: 0;
+  color: var(--deep);
+}
+.profile-identity p {
+  color: var(--muted);
+  margin-bottom: 0;
+  opacity: 1;
+}
+.profile-handle {
+  font-weight: 700;
+  color: #087456;
+  opacity: 1;
+}
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 20px 28px 0;
+}
+.profile-edit-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 22px;
+  display: flex;
+  gap: 20px;
   align-items: center;
   margin-top: 25px;
 }
-.profile-hero h2 {
+.profile-edit-card h2 {
   margin: 0;
 }
-.profile-hero p {
-  opacity: 0.8;
+.profile-edit-card p {
+  color: var(--muted);
   margin-bottom: 0;
+}
+.genre-tags {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.genre-tags li {
+  border: 1px solid #d9eddf;
+  background: #f5fff8;
+  color: #087456;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
 }
 .avatar.big {
   width: 70px;
@@ -1640,4 +1703,204 @@ input[type='checkbox']:disabled {
   .player-external { display: none; }
   /* Embed mais estreito: o botão de adicionar cabe na mesma linha. */
   .spotify-embed { flex: 0 1 260px; }
+}
+
+
+
+/* ===== Perfil público, banner e janela de perfil ===== */
+.avatar-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.name-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.name-link:hover b { text-decoration: underline; }
+.profile-notice { margin-top: 16px; }
+
+/* Banner */
+.banner-section { margin-top: 25px; }
+.banner-preview { width: 100%; border-radius: 13px; margin-bottom: 14px; }
+.banner-types { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.banner-types label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: #fff;
+  cursor: pointer;
+}
+.banner-types label.active { border-color: var(--green); background: #e9faf3; color: #087456; }
+.banner-types input { accent-color: var(--green); margin: 0; }
+.banner-color-field,
+.banner-gradient-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.banner-color-field { max-width: 300px; }
+.banner-gradient-fields label { display: inline-flex; align-items: center; gap: 7px; }
+.banner-color-field input,
+.banner-gradient-fields input {
+  width: 58px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.banner-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.banner-presets button {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.banner-presets button.active { border-color: var(--deep); }
+.banner-image-fields .hint { margin: 10px 0 0; }
+.banner-section > .primary { margin-top: 16px; }
+
+/* Janela de perfil público */
+.profile-popup { position: relative; width: min(440px, 100%); padding: 0; overflow: hidden; }
+.profile-popup .profile-banner { height: 140px; }
+.profile-popup-close { position: absolute; top: 10px; right: 10px; z-index: 3; background: rgba(255, 255, 255, .92); }
+.profile-popup-body {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 0 22px 24px;
+}
+.profile-popup-body .avatar.big { margin-top: -35px; border: 4px solid #fff; }
+.profile-popup-body h2 { margin: 6px 0 0; font-size: 21px; }
+.profile-popup-body .genre-tags { justify-content: center; }
+.profile-bio { margin: 4px 0 0; color: var(--muted); line-height: 1.5; }
+
+/* Amigos nas mensagens */
+.friend-add {
+  display: flex;
+  gap: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.friend-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 9px;
+  font-size: 13px;
+}
+.friend-add input:focus { outline: 2px solid #a5e7cc; border-color: var(--green); }
+.friend-add button { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.friend-add button svg { width: 15px; }
+.friend-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.aside-label {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* Notificações */
+.invite-list,
+.notification-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.invite-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid #d9eddf;
+  border-radius: 12px;
+  background: #f5fff8;
+}
+.invite-item > span:not(.invite-actions) { display: grid; gap: 2px; flex: 1; min-width: 140px; font-size: 14px; }
+.invite-item small { color: var(--muted); font-size: 12px; }
+.invite-actions { display: flex; gap: 8px; }
+.invite-actions button { display: inline-flex; align-items: center; gap: 5px; }
+.notification-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.notification-item { display: flex; align-items: center; gap: 11px; }
+.notification-open {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 1px solid #d9eddf;
+  border-radius: 11px;
+  background: #f5fff8;
+  color: var(--ink);
+  padding: 11px 13px;
+  cursor: pointer;
+}
+.notification-open:hover { border-color: var(--green); }
+.notification-open.liked { background: #fff5f7; border-color: #ffd9e0; }
+.notification-open > span { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.notification-open small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.notification-open svg { width: 17px; flex: 0 0 auto; color: var(--green); }
+.notification-open.liked svg { color: #e5484d; }
+
+@media (max-width: 880px) {
+  .profile-identity { padding: 0 20px; }
+  .profile-actions { padding: 18px 20px 0; }
+  .profile-edit-card { flex-direction: column; align-items: flex-start; }
+  .notification-open { font-size: 13px; }
+  /* A lista de conversas vira uma faixa horizontal: o formulário de convite
+     e o rótulo continuam em linhas próprias, fora dos atalhos. A linha do
+     grid usa min-content porque a faixa flexível embrulha em várias linhas. */
+  .messages { grid-template-rows: min-content minmax(0, 1fr); }
+  .messages aside {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    overflow: auto;
+    max-height: 190px;
+    padding: 8px;
+  }
+  .friend-add { flex: 1 0 100%; order: -3; margin-bottom: 2px; }
+  .friend-notice { flex: 1 0 100%; order: -2; margin-bottom: 2px; }
+  .messages aside .aside-label { flex: 1 0 100%; order: -1; margin: 6px 0 2px; }
+}
+
+@media (max-width: 480px) {
+  .profile-banner { height: 112px; }
+  .profile-identity { flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 14px; }
+  .profile-popup-body .avatar.big { margin-top: -30px; }
+  .invite-item { flex-direction: column; align-items: flex-start; }
+  .invite-actions { width: 100%; }
+  .invite-actions button { flex: 1; justify-content: center; }
 }

@@ -8,14 +8,24 @@ export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onE
   callbacksRef.current = { onReady, onStateChange, onProgress, onError, onApiUnavailable }
 
   useEffect(() => {
+    const container = containerRef.current
+    if (!container) return undefined
     let active = true
     let player
     let progressTimer
 
+    // A API do YouTube substitui o elemento que recebe por um iframe. Esse nó
+    // é criado aqui justamente para que o React continue dono do seu próprio
+    // container: sem isso, a próxima troca de faixa tenta remover um nó que já
+    // saiu da árvore e o React desmonta o aplicativo inteiro (página em branco).
+    const alvo = document.createElement('div')
+    alvo.className = 'youtube-player-target'
+    container.appendChild(alvo)
+
     loadYoutubePlayerApi()
       .then((youtube) => {
-        if (!active || !containerRef.current) return
-        player = new youtube.Player(containerRef.current, {
+        if (!active) return
+        player = new youtube.Player(alvo, {
           width: '200',
           height: '200',
           videoId,
@@ -41,7 +51,14 @@ export function YouTubePlayer({ videoId, onReady, onStateChange, onProgress, onE
     return () => {
       active = false
       window.clearInterval(progressTimer)
-      player?.destroy()
+      try {
+        player?.destroy()
+      } catch {
+        // O player já tinha sido destruído pela própria API.
+      }
+      // Quando o YouTube troca o nó, ele sai da árvore sozinho: remover é só
+      // um passo de limpeza para o caso de a API nem ter chegado a carregar.
+      alvo.remove()
     }
   }, [videoId])
 

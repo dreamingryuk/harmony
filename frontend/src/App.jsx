@@ -3,12 +3,14 @@ import { configured } from './lib/supabase'
 import { useSynq, useUnreadMessages } from './hooks/useSynq'
 import { useMentionNotifications } from './hooks/useMentionNotifications'
 import { Shell } from './components/Shell'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { SettingsErrorBoundary } from './components/SettingsErrorBoundary'
 import { Auth } from './pages/Auth'
 import { Discover } from './pages/Discover'
 import { Library } from './pages/Library'
 import { Community } from './pages/Community'
 import { Messages } from './pages/Messages'
+import { Notifications } from './pages/Notifications'
 import { Retrospective } from './pages/Retrospective'
 import { Profile } from './pages/Profile'
 import { AccountSettings } from './pages/AccountSettings'
@@ -37,6 +39,7 @@ function AppRoutes() {
         <Route path="/biblioteca" element={<Library app={app} />} />
         <Route path="/comunidade" element={<Community app={app} />} />
         <Route path="/mensagens" element={<Messages app={app} />} />
+        <Route path="/notificacoes" element={<Notifications app={app} />} />
         <Route path="/retrospectiva" element={<Retrospective app={app} />} />
         <Route path="/perfil" element={<Profile app={app} />} />
         <Route
@@ -58,7 +61,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AppErrorBoundary>
+        <AppRoutes />
+      </AppErrorBoundary>
     </BrowserRouter>
   )
 }
