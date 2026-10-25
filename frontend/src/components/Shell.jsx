@@ -16,14 +16,15 @@ const formatTime = (seconds) => {
 
 const trackKey = (track) => track?.youtubeId || track?.spotifyId
 
+// O último item é o rótulo curto usado na barra inferior de telas pequenas.
 const nav = [
-  ['/', 'Descobrir', Home],
-  ['/biblioteca', 'Biblioteca', LibraryIcon],
-  ['/comunidade', 'Comunidade', Users],
-  ['/mensagens', 'Mensagens', MessageCircle],
-  ['/retrospectiva', 'Retrospectiva', BarChart3],
-  ['/perfil', 'Perfil', UserRound],
-  ['/configuracoes', 'Configurações', Settings],
+  ['/', 'Descobrir', Home, 'Descobrir'],
+  ['/biblioteca', 'Biblioteca', LibraryIcon, 'Biblioteca'],
+  ['/comunidade', 'Comunidade', Users, 'Comunidade'],
+  ['/mensagens', 'Mensagens', MessageCircle, 'Mensagens'],
+  ['/retrospectiva', 'Retrospectiva', BarChart3, 'Resumo'],
+  ['/perfil', 'Perfil', UserRound, 'Perfil'],
+  ['/configuracoes', 'Configurações', Settings, 'Ajustes'],
 ]
 
 export function Shell({ app, children }) {
@@ -31,6 +32,8 @@ export function Shell({ app, children }) {
   const navigate = useNavigate()
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [logoutError, setLogoutError] = useState('')
+  // A altura real do player reposiciona a barra inferior e o fim da página.
+  const [playerHeight, setPlayerHeight] = useState(0)
   const logout = async () => {
     try {
       setLogoutBusy(true)
@@ -47,7 +50,7 @@ export function Shell({ app, children }) {
     }
   }
   return (
-    <div className="shell">
+    <div className="shell" style={{ '--player-h': `${playerHeight}px` }}>
       <aside className="sidebar">
         <div className="brand">
           <Music2 /> Harmony
@@ -104,25 +107,29 @@ export function Shell({ app, children }) {
         {children}
       </main>
       <nav className="bottom-nav" aria-label="Navegação principal">
-        {nav.map(([to, label, Icon]) => (
+        {nav.map(([to, label, Icon, short]) => (
           <NavLink
             end={to === '/'}
             key={to}
             to={to}
+            aria-label={label}
             className={location.pathname === to ? 'active' : ''}
           >
             <Icon />
-            <span>{label}</span>
+            <span className="nav-text">
+              <span className="nav-full">{label}</span>
+              <span className="nav-short">{short}</span>
+            </span>
             {to === '/mensagens' && app.unreadCount > 0 && <i className="nav-dot" />}
           </NavLink>
         ))}
       </nav>
-      <Player app={app} />
+      <Player app={app} onHeightChange={setPlayerHeight} />
     </div>
   )
 }
 
-export function Player({ app }) {
+export function Player({ app, onHeightChange }) {
   const [track, setTrack] = useState(null),
     [playing, setPlaying] = useState(false),
     [progress, setProgress] = useState(0),
@@ -135,7 +142,24 @@ export function Player({ app }) {
   const youtubePlayer = useRef(null),
     playRequested = useRef(false),
     logged = useRef(new Set()),
-    activeTrack = useRef(null)
+    activeTrack = useRef(null),
+    footer = useRef(null)
+  // Comunica a altura do player para o Shell: barra inferior e fim da página
+  // acompanham qualquer mudança de layout (uma ou duas linhas de controles).
+  useEffect(() => {
+    const element = footer.current
+    if (!onHeightChange) return
+    if (!element) {
+      onHeightChange(0)
+      return
+    }
+    const update = () => onHeightChange(element.offsetHeight)
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [onHeightChange, track])
   useEffect(() => {
     const listener = (event) => {
       const next = event.detail
@@ -290,7 +314,7 @@ export function Player({ app }) {
   const isYoutube = track.platform === 'youtube' && track.youtubeId
   const percent = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0
   return (
-    <footer className={`player ${isYoutube ? 'youtube-player' : 'spotify-player'}`}>
+    <footer className={`player ${isYoutube ? 'youtube-player' : 'spotify-player'}`} ref={footer}>
       <div className="player-media">
         {isYoutube && (
           <div className="player-audio">
