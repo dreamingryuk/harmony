@@ -2,3 +2,6 @@ node_modules
 dist
 .env
 !.env.example
+
+# Estado local da Supabase CLI (link do projeto)
+supabase/.temp

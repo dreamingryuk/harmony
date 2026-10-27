@@ -1,5 +1,4 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import sharp from 'npm:sharp@0.33.5'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +12,8 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: corsHeaders })
 }
 
-function isSupportedImage(bytes: Uint8Array) {
+// Identifica o formato pelas assinaturas binárias, sem depender do Content-Type do envio.
+function detectImageType(bytes: Uint8Array) {
   const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
   const png =
     bytes.length >= 8 &&
@@ -29,7 +29,10 @@ function isSupportedImage(bytes: Uint8Array) {
     bytes.length >= 12 &&
     String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
     String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
-  return jpeg || png || webp
+  if (jpeg) return { contentType: 'image/jpeg', extension: 'jpg' }
+  if (png) return { contentType: 'image/png', extension: 'png' }
+  if (webp) return { contentType: 'image/webp', extension: 'webp' }
+  return null
 }
 
 function getOwnedAvatarPath(avatarUrl: string | null, userId: string) {
@@ -138,31 +141,24 @@ Deno.serve(async (request) => {
   if (file.size === 0) return jsonResponse({ error: 'O arquivo de imagem está vazio.' }, 400)
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  if (!isSupportedImage(bytes)) {
+  const imageType = detectImageType(bytes)
+  if (!imageType) {
     return jsonResponse({ error: 'Formato inválido. Envie uma imagem JPEG, PNG ou WebP válida.' }, 415)
   }
 
-  let optimized: Uint8Array
-  try {
-    optimized = await sharp(bytes, { failOn: 'error', limitInputPixels: 40_000_000 })
-      .rotate()
-      .resize(512, 512, { fit: 'cover', position: 'attention' })
-      .webp({ quality: 84, effort: 4 })
-      .toBuffer()
-  } catch {
-    return jsonResponse({ error: 'O arquivo não contém uma imagem válida ou não pôde ser processado.' }, 415)
-  }
-
-  const path = `${userId}/${crypto.randomUUID()}.webp`
+  // O recorte já acontece no navegador em 512x512 (AvatarCropDialog), então a função
+  // só valida e guarda o arquivo. O sharp não é usado porque o runtime de Edge Functions
+  // do Supabase não carrega módulos nativos.
+  const path = `${userId}/${crypto.randomUUID()}.${imageType.extension}`
   const { error: uploadError } = await admin.storage
     .from(bucket)
-    .upload(path, new Blob([optimized], { type: 'image/webp' }), {
-      contentType: 'image/webp',
+    .upload(path, new Blob([bytes], { type: imageType.contentType }), {
+      contentType: imageType.contentType,
       cacheControl: '3600',
       upsert: false,
     })
   if (uploadError) {
-    console.error('Could not save the processed avatar:', uploadError.message)
+    console.error('Could not save the avatar:', uploadError.message)
     if (uploadError.message.toLowerCase().includes('bucket not found')) {
       return jsonResponse({
         error: 'O armazenamento de fotos não está configurado. Execute supabase/profile-playlists-notifications.sql no SQL Editor do Supabase.',
