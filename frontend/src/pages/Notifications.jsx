@@ -234,7 +234,7 @@ export function Notifications({ app }) {
         )}
       </Section>
 
-      {popup && <ProfilePopup profile={popup} onClose={() => setPopup(null)} />}
+      {popup && <ProfilePopup profile={popup} userId={userId} onClose={() => setPopup(null)} />}
     </Page>
   )
 }

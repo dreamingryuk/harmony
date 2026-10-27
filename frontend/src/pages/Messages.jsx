@@ -329,7 +329,7 @@ export function Messages({ app }) {
         </section>
       </div>
       {openedPlaylist && <PlaylistDialog playlist={openedPlaylist} app={app} readOnly onClose={() => setOpenedPlaylist(null)} onSaved={() => {}} />}
-      {profilePopup && <ProfilePopup profile={profilePopup} onClose={() => setProfilePopup(null)} />}
+      {profilePopup && <ProfilePopup profile={profilePopup} userId={userId} onClose={() => setProfilePopup(null)} />}
     </Page>
   )
 }

@@ -44,6 +44,7 @@ function toYoutubeTrack(item) {
     uri: `https://www.youtube.com/watch?v=${videoId}`,
     title: item.snippet.title,
     artists: item.snippet.channelTitle || 'YouTube',
+    channelId: item.snippet.channelId || null,
     album: 'YouTube Music',
     coverUrl: thumbnails(item.snippet),
     previewUrl: '',
@@ -103,6 +104,52 @@ export async function youtubePopularTracks(limit = 12) {
   } catch {
     return searchYoutubeTracks('top hits', { order: 'viewCount', limit })
   }
+}
+
+const YOUTUBE_CHANNELS_API = 'https://www.googleapis.com/youtube/v3/channels'
+
+// Artistas das faixas: cada vídeo aponta para o canal (channelId) e uma única
+// chamada em "channels" traz a foto de perfil de todos de uma vez (1 unidade
+// de cota). Sem chave ou em caso de falha, vale a capa do vídeo.
+export async function youtubeArtists(tracks, limit = 8) {
+  const vistos = new Set()
+  const artistas = []
+  for (const track of tracks || []) {
+    const nome = (track.artists || '').trim()
+    if (!nome) continue
+    const chave = nome.toLowerCase()
+    if (vistos.has(chave)) continue
+    vistos.add(chave)
+    artistas.push({ nome, channelId: track.channelId || null, capa: track.coverUrl || '' })
+    if (artistas.length >= limit) break
+  }
+
+  const comCanal = artistas.filter((artista) => artista.channelId)
+  const fotos = new Map()
+  const key = youtubeApiKey()
+  if (key && comCanal.length) {
+    try {
+      const params = new URLSearchParams({
+        part: 'snippet',
+        id: comCanal.map((artista) => artista.channelId).join(','),
+        key,
+      })
+      const response = await fetch(`${YOUTUBE_CHANNELS_API}?${params}`)
+      const result = await response.json()
+      if (response.ok) {
+        for (const canal of result.items || []) fotos.set(canal.id, thumbnails(canal.snippet))
+      }
+    } catch {
+      // Rede fora: as capas dos vídeos continuam valendo.
+    }
+  }
+
+  return artistas.map((artista, index) => ({
+    id: artista.channelId || `artist-${index}-${artista.nome.toLowerCase().replace(/\W+/g, '-')}`,
+    name: artista.nome,
+    image: (artista.channelId && fotos.get(artista.channelId)) || artista.capa || '',
+    genre: 'YouTube Music',
+  }))
 }
 
 export function loadYoutubePlayerApi() {

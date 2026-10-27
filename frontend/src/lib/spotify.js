@@ -184,3 +184,14 @@ export async function spotifyArtists(ids) {
   const data = await spotifyFetch(`/artists?ids=${list.map(encodeURIComponent).join(',')}`)
   return (data.artists || []).filter(Boolean).map(toArtist)
 }
+
+// Artistas de um gênero: o campo "genre:" do search do Spotify devolve perfis
+// com foto, então dá para sugerir gente nova a partir do que a pessoa ouve.
+export async function spotifyGenreArtists(genre, limit = 8) {
+  const clean = String(genre || '').trim()
+  if (!clean) return []
+  const data = await spotifyFetch(
+    `/search?${new URLSearchParams({ q: `genre:${clean}`, type: 'artist', limit: String(limit) })}`
+  )
+  return (data.artists?.items || []).filter(Boolean).map(toArtist)
+}

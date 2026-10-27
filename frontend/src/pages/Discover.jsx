@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Music2, RefreshCw, Search, Sparkles, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { connectSpotify, searchTracks, spotifyArtists, spotifyPopularSongs } from '../lib/spotify'
-import { searchYoutubeTracks, youtubeApiKey, youtubePopularTracks } from '../lib/youtube'
+import { connectSpotify, searchTracks, spotifyArtists, spotifyGenreArtists, spotifyPopularSongs } from '../lib/spotify'
+import { searchYoutubeTracks, youtubeApiKey, youtubePopularTracks, youtubeArtists } from '../lib/youtube'
 import { useMusicConnections } from '../hooks/useMusicConnections'
 import { CoverArt, Page, Section, TrackRow } from '../components/Media'
 import { PlaylistCard, PlaylistDialog } from '../components/PlaylistComponents'
 import { playPlaylist } from '../utils/playlist'
+import { fromJson } from '../utils/track'
 
 const featured = [
   {
@@ -61,7 +62,9 @@ export function Discover({ app }) {
     [artists, setArtists] = useState(curatedArtists),
     [publicPlaylists, setPublicPlaylists] = useState([]),
     [openedPlaylist, setOpenedPlaylist] = useState(null),
-    [refreshKey, setRefreshKey] = useState(0)
+    [refreshKey, setRefreshKey] = useState(0),
+    [sugestoes, setSugestoes] = useState({ meus: [], novos: [], tocadas: [], carregando: true, aviso: '' })
+  const sugestaoKey = useRef('')
   const { connections, connectYoutube } = useMusicConnections(app.user.id)
   const connectedPlatforms = Object.entries(connections)
     .filter(([, connected]) => connected)
@@ -91,6 +94,16 @@ export function Discover({ app }) {
     }
   }
 
+  // No YouTube as fotos vêm dos canais dos vídeos (uma chamada para todos).
+  const loadYoutubeArtistList = async (tracks) => {
+    try {
+      const list = await youtubeArtists(tracks)
+      return list.length ? list : curatedArtists
+    } catch {
+      return curatedArtists
+    }
+  }
+
   // Em alta no Spotify/YouTube (ou no conteúdo curado quando nada está conectado).
   useEffect(() => {
     let active = true
@@ -107,7 +120,7 @@ export function Discover({ app }) {
           const tracks = await youtubePopularTracks(12)
           if (!active) return
           setTrending(tracks)
-          setArtists(curatedArtists)
+          setArtists(await loadYoutubeArtistList(tracks))
         } else {
           setTrending(featured)
           setArtists(curatedArtists)
@@ -139,6 +152,119 @@ export function Discover({ app }) {
       .then(({ data }) => setPublicPlaylists(data || []))
       .catch(() => {})
   }, [])
+
+  // Sugestões personalizadas: o que a pessoa mais ouve (histórico de
+  // reproduções) e artistas novos a partir do gênero do artista favorito dela.
+  // A chave evita repetir as buscas toda vez que a janela ganha foco e também
+  // decide se o resultado que chegou ainda é o que está valendo na tela.
+  useEffect(() => {
+    const plataforma = connections[activePlatform]
+      ? activePlatform
+      : Object.entries(connections).find(([, conectado]) => conectado)?.[0] || ''
+
+    const descobrirNovos = async (termo) => {
+      if (!termo || !plataforma) return []
+      if (plataforma === 'spotify') {
+        const faixas = await searchTracks(termo)
+        const principal = faixas[0]?.artistIds?.[0]
+        const detalhes = principal ? await spotifyArtists([principal]) : []
+        const genero = detalhes[0]?.genres?.[0]
+        if (genero) {
+          try {
+            const parecidos = await spotifyGenreArtists(genero)
+            if (parecidos.length) return parecidos
+          } catch {
+            // Filtro de gênero indisponível: cai para os artistas das buscas.
+          }
+        }
+        const ids = [...new Set(faixas.flatMap((faixa) => faixa.artistIds || []))]
+        return spotifyArtists(ids)
+      }
+      return youtubeArtists(await searchYoutubeTracks(termo, { limit: 12 }), 8)
+    }
+
+    const load = async () => {
+      const chave = `${app.user.id}:${plataforma}`
+      if (sugestaoKey.current === chave) return
+      sugestaoKey.current = chave
+      const vigente = () => sugestaoKey.current === chave
+
+      if (!configured) {
+        setSugestoes({ meus: [], novos: [], tocadas: [], carregando: false, aviso: 'Configure o Supabase para ver sugestões.' })
+        return
+      }
+      setSugestoes((current) => ({ ...current, carregando: true, aviso: '' }))
+      try {
+        const { data: eventos, error } = await supabase
+          .from('listening_events')
+          .select('artist_name, genres, track, played_at')
+          .eq('user_id', app.user.id)
+          .order('played_at', { ascending: false })
+          .limit(400)
+        if (error) throw error
+
+        const artistas = new Map()
+        const faixas = new Map()
+        const generos = new Map()
+        for (const evento of eventos || []) {
+          const nome = String(evento.artist_name || evento.track?.artists || '').trim()
+          if (nome) {
+            const atual = artistas.get(nome) || { id: `meu-${nome}`, name: nome, count: 0, image: '', genre: '' }
+            atual.count += 1
+            if (!atual.image && evento.track?.cover_url) atual.image = evento.track.cover_url
+            if (!atual.genre && evento.genres?.length) atual.genre = evento.genres[0]
+            artistas.set(nome, atual)
+          }
+          const chaveFaixa = evento.track?.spotify_id || evento.track?.title
+          if (chaveFaixa) {
+            const atual = faixas.get(chaveFaixa) || { track: evento.track, count: 0 }
+            atual.count += 1
+            faixas.set(chaveFaixa, atual)
+          }
+          for (const genero of evento.genres || []) {
+            generos.set(genero, (generos.get(genero) || 0) + 1)
+          }
+        }
+
+        const meus = [...artistas.values()].sort((a, b) => b.count - a.count).slice(0, 6)
+        const tocadas = [...faixas.values()]
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
+          .map((entry) => fromJson(entry.track))
+          .filter(Boolean)
+        const conhecidos = new Set(meus.map((artista) => artista.name.toLowerCase()))
+        const generoTop = [...generos.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || ''
+        const termo = generoTop || meus[0]?.name || ''
+
+        let novos = []
+        try {
+          novos = (await descobrirNovos(termo)).filter(
+            (artista) => artista?.name && !conhecidos.has(artista.name.toLowerCase())
+          )
+        } catch {
+          novos = []
+        }
+        if (!novos.length) {
+          novos = curatedArtists.filter((artista) => !conhecidos.has(artista.name.toLowerCase()))
+        }
+
+        if (!vigente()) return
+        setSugestoes({
+          meus,
+          novos: novos.slice(0, 6),
+          tocadas,
+          carregando: false,
+          aviso: eventos?.length
+            ? 'Sugestões a partir do que você tem ouvido no Harmony.'
+            : 'Toque algumas músicas e as sugestões passam a usar o seu histórico.',
+        })
+      } catch {
+        if (!vigente()) return
+        setSugestoes((current) => ({ ...current, carregando: false }))
+      }
+    }
+    load()
+  }, [app.user.id, activePlatform, connections])
 
   const connectPlatform = async (platform) => {
     try {
@@ -175,6 +301,16 @@ export function Discover({ app }) {
   }
   const openPlaylist = (playlist) => setOpenedPlaylist(playlist)
   const trendLabel = `no ${platformName(trendPlatform)}`
+  // Card de artista usado nas três grade: em alta, seus e sugeridos.
+  const artistCard = (artist, fallback = 'Artista') => (
+    <button type="button" className="artist-card" key={artist.id} onClick={() => runSearch(artist.name)}>
+      <span className="artist-avatar">
+        <CoverArt src={artist.image} alt={`Foto de ${artist.name}`} />
+      </span>
+      <b title={artist.name}>{artist.name}</b>
+      <small>{artist.genre || artist.genres?.[0] || fallback}</small>
+    </button>
+  )
   return (
     <Page
       title={`Olá, ${(app.profile?.display_name || 'ouvinte').split(' ')[0]}`}
@@ -316,6 +452,56 @@ export function Discover({ app }) {
 
           <section className="section">
             <div className="section-head">
+              <h2>Para você</h2>
+              <p className="hint">{sugestoes.aviso}</p>
+            </div>
+            {sugestoes.carregando ? (
+              <p className="hint">Montando suas sugestões...</p>
+            ) : (
+              <>
+                {sugestoes.tocadas.length > 0 && (
+                  <>
+                    <div className="section-head section-subhead">
+                      <h3>As músicas que você mais ouve</h3>
+                    </div>
+                    {sugestoes.tocadas.map((track) => (
+                      <TrackRow
+                        key={track.spotifyId || track.title}
+                        track={track}
+                        queue={sugestoes.tocadas}
+                      />
+                    ))}
+                  </>
+                )}
+                {sugestoes.meus.length > 0 && (
+                  <>
+                    <div className="section-head section-subhead">
+                      <h3>Seus artistas</h3>
+                    </div>
+                    <div className="artist-grid">
+                      {sugestoes.meus.map((artist) => artistCard(artist, 'Seu favorito'))}
+                    </div>
+                  </>
+                )}
+                {sugestoes.novos.length > 0 && (
+                  <>
+                    <div className="section-head section-subhead">
+                      <h3>Artistas novos para você</h3>
+                      {!connections[activePlatform] && (
+                        <p className="hint">Conecte o Spotify ou o YouTube para descobrir mais gente.</p>
+                      )}
+                    </div>
+                    <div className="artist-grid">
+                      {sugestoes.novos.map((artist) => artistCard(artist))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="section">
+            <div className="section-head">
               <h2>Playlists em alta</h2>
               <p className="hint">As playlists públicas mais recentes da comunidade.</p>
             </div>
@@ -344,15 +530,7 @@ export function Discover({ app }) {
               <p className="hint">Toque em um artista para ver as faixas dele.</p>
             </div>
             <div className="artist-grid">
-              {artists.map((artist) => (
-                <button type="button" className="artist-card" key={artist.id} onClick={() => runSearch(artist.name)}>
-                  <span className="artist-avatar">
-                    <CoverArt src={artist.image} alt={`Foto de ${artist.name}`} />
-                  </span>
-                  <b title={artist.name}>{artist.name}</b>
-                  <small>{artist.genre || artist.genres?.[0] || 'Artista'}</small>
-                </button>
-              ))}
+              {artists.map((artist) => artistCard(artist))}
             </div>
           </section>
 

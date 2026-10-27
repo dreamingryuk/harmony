@@ -1538,6 +1538,9 @@ input[type='checkbox']:disabled {
 }
 .section-head h2 { margin: 0; }
 .section-head p { margin: 0; }
+/* Subtítulos dentro de uma seção (sugestões do feed) */
+.section-head.section-subhead { margin-top: 16px; margin-bottom: 11px; }
+.section-head.section-subhead h3 { margin: 0; font-size: 16px; }
 .chart-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .chart-controls button {
   border: 1px solid var(--line);
@@ -1795,6 +1798,9 @@ input[type='checkbox']:disabled {
 .profile-popup-body .avatar.big { margin-top: -35px; border: 4px solid #fff; }
 .profile-popup-body h2 { margin: 6px 0 0; font-size: 21px; }
 .profile-popup-body .genre-tags { justify-content: center; }
+.profile-popup-actions { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 12px; }
+.profile-popup-actions .form-error { margin: 0; }
+.profile-popup-actions .hint { margin: 0; }
 .profile-bio { margin: 4px 0 0; color: var(--muted); line-height: 1.5; }
 
 /* Amigos nas mensagens */

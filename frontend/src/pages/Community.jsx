@@ -359,7 +359,7 @@ export function Community({ app }) {
         )}
       </Section>
       {openedPlaylist && <PlaylistDialog playlist={openedPlaylist} app={app} readOnly onClose={() => setOpenedPlaylist(null)} onSaved={() => {}} />}
-      {profilePopup && <ProfilePopup profile={profilePopup} onClose={() => setProfilePopup(null)} />}
+      {profilePopup && <ProfilePopup profile={profilePopup} userId={app.user.id} onClose={() => setProfilePopup(null)} />}
     </Page>
   )
 }
