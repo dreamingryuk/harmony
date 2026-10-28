@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { connectSpotify } from '../lib/spotify'
 import { youtubeApiKey } from '../lib/youtube'
 import { useMusicConnections } from '../hooks/useMusicConnections'
 import { Page } from '../components/Media'
@@ -11,8 +10,7 @@ import { browserDescription, passwordPolicyError, passwordStrength } from '../ut
 
 export function AccountSettings({ app }) {
   const navigate = useNavigate()
-  const { connections, disconnectSpotify, connectYoutube, disconnectYoutube } =
-    useMusicConnections(app.user?.id)
+  const { connections, connectYoutube, disconnectYoutube } = useMusicConnections(app.user?.id)
   const [profileForm, setProfileForm] = useState({
     display_name: '',
     username: '',
@@ -82,14 +80,7 @@ export function AccountSettings({ app }) {
   const toggleMusicPlatform = async (platform) => {
     setMusicNotice('')
     try {
-      if (platform === 'spotify') {
-        if (connections.spotify) {
-          disconnectSpotify()
-          setMusicNotice('Spotify foi desvinculado deste navegador.')
-        } else {
-          await connectSpotify()
-        }
-      } else if (connections.youtube) {
+      if (connections.youtube) {
         disconnectYoutube()
         setMusicNotice('YouTube Music foi desativado neste navegador.')
       } else {
@@ -369,17 +360,26 @@ export function AccountSettings({ app }) {
         </p>
       )}
       <section className="settings-section" aria-labelledby="settings-music-title">
-        <h2 id="settings-music-title">Plataformas de música</h2>
-        <p className="settings-description">Escolha os serviços que podem ser usados para buscar e reproduzir músicas neste navegador. Desconectar remove o vínculo local; para revogar o acesso OAuth do Spotify, remova também o Harmony nas configurações da sua conta Spotify.</p>
+        <h2 id="settings-music-title">Aparência e música</h2>
+        <p className="settings-description">Defina o tema do app e use o YouTube como plataforma de reprodução local.</p>
         {musicNotice && <p className="notice" role="status">{musicNotice}</p>}
         <div className="music-service-list">
           <article className="music-service">
             <div>
-              <b>Spotify</b>
-              <span>{connections.spotify ? 'Conectado neste navegador' : 'Não conectado'}</span>
+              <b>Tema</b>
+              <span>{localStorage.getItem('harmony-theme') === 'dark' ? 'Escuro' : localStorage.getItem('harmony-theme') === 'light' ? 'Claro' : 'Automático'}</span>
             </div>
-            <button type="button" className={connections.spotify ? 'secondary' : 'primary'} onClick={() => toggleMusicPlatform('spotify')}>
-              {connections.spotify ? 'Desconectar' : 'Conectar'}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                const current = localStorage.getItem('harmony-theme') || 'auto'
+                const next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark'
+                localStorage.setItem('harmony-theme', next)
+                document.documentElement.dataset.theme = next === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : next
+              }}
+            >
+              Alternar tema
             </button>
           </article>
           <article className="music-service">

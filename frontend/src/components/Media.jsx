@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Heart, Music2, Play } from 'lucide-react'
-import { saveToSpotify, FALLBACK_COVER } from '../lib/spotify'
+import { useEffect, useRef, useState } from 'react'
+import { Heart, Play } from 'lucide-react'
+import { FALLBACK_COVER } from '../lib/spotify'
 import { play } from '../utils/track'
 
 const initials = (name = 'S') =>
@@ -45,24 +45,33 @@ export function Avatar({ profile, className = '' }) {
   return <span className={`avatar ${className}`}>{initials(profile?.display_name)}</span>
 }
 
+export function MarqueeText({ text, subtitle, ariaLabel, className = '' }) {
+  const ref = useRef(null)
+  const [active, setActive] = useState(false)
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const shouldAnimate = element.scrollWidth > element.clientWidth + 3
+    setActive(shouldAnimate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }, [text, subtitle])
+
+  return (
+    <div className={`marquee-wrap ${className}`} aria-label={ariaLabel || text} title={ariaLabel || text}>
+      <div ref={ref} className={`marquee-text ${active ? 'is-active' : ''}`}>
+        <span>{text}</span>
+        {subtitle && <small>{subtitle}</small>}
+      </div>
+    </div>
+  )
+}
+
 export function TrackRow({ track, saved, onToggleSave, queue }) {
-  const [saving, setSaving] = useState(false)
-  const spotifySave = async () => {
-    try {
-      setSaving(true)
-      await saveToSpotify(track)
-      alert('Faixa salva nos seus favoritos do Spotify!')
-    } catch (error) {
-      alert(error.message)
-    } finally {
-      setSaving(false)
-    }
-  }
   return (
     <article className="track-row">
       <CoverArt src={track.coverUrl} alt={`Capa de ${track.album}`} />
       <button className="track-copy" onClick={() => play(track, queue)}>
-        <b>{track.title}</b>
+        <MarqueeText text={track.title} ariaLabel={track.title} />
         <span>
           {track.artists} · {track.album}
         </span>
@@ -73,11 +82,6 @@ export function TrackRow({ track, saved, onToggleSave, queue }) {
       {onToggleSave && (
         <button className={`icon ${saved ? 'liked' : ''}`} onClick={() => onToggleSave(track)}>
           <Heart fill={saved ? 'currentColor' : 'none'} />
-        </button>
-      )}
-      {track.platform !== 'youtube' && (
-        <button disabled={saving} className="icon spotify" onClick={spotifySave} aria-label="Salvar no Spotify">
-          <Music2 />
         </button>
       )}
     </article>

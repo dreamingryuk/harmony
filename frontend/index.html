@@ -4,8 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10251f" />
+    <meta name="theme-color" content="#f3f6f5" />
     <meta name="description" content="Descubra, compartilhe e converse sobre música no Harmony." />
+    <script>
+      (function () {
+        const stored = localStorage.getItem('harmony-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = stored === 'dark' || stored === 'light' ? stored : prefersDark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
     <title>Harmony — sua comunidade musical</title>
   </head>
   <body>

@@ -52,6 +52,7 @@ export function MentionText({ text, profiles }) {
 export function MentionComposer({
   value,
   onChange,
+  onSubmit,
   profiles,
   placeholder,
   className,
@@ -151,7 +152,17 @@ export function MentionComposer({
           updateValue(event.target.value, event.target.selectionStart)
         }
         onKeyDown={(event) => {
-          if (event.key === 'Escape') setMention(null)
+          if (event.key === 'Escape') {
+            setMention(null)
+            return
+          }
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent?.isComposing) {
+            const trimmed = value.trim()
+            if (trimmed && onSubmit) {
+              event.preventDefault()
+              onSubmit()
+            }
+          }
         }}
       />
       {suggestions.length > 0 && (

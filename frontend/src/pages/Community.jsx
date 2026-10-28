@@ -23,6 +23,7 @@ export function Community({ app }) {
     [playlists, setPlaylists] = useState([]),
     [openedPlaylist, setOpenedPlaylist] = useState(null),
     [profiles, setProfiles] = useState([]),
+    [newProfiles, setNewProfiles] = useState([]),
     [openReplies, setOpenReplies] = useState(new Set()),
     [replyDrafts, setReplyDrafts] = useState({}),
     [profilePopup, setProfilePopup] = useState(null)
@@ -73,15 +74,22 @@ export function Community({ app }) {
     if (!configured) return
     supabase
       .from('profiles')
-      .select('id, username, display_name, avatar_url')
+      .select('id, username, display_name, avatar_url, created_at')
       .then(({ data, error: profileError }) => {
         if (profileError) {
           setError(`Não foi possível carregar pessoas para mencionar: ${profileError.message}`)
           return
         }
-        setProfiles(data || [])
+        const people = data || []
+        setProfiles(people)
+        setNewProfiles(
+          people
+            .filter((profile) => profile.id !== app.user.id)
+            .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+            .slice(0, 5)
+        )
       })
-  }, [])
+  }, [app.user.id])
   useEffect(() => {
     const notificationId = new URLSearchParams(location.search).get('notificacao')
     const notifications = app.mentionNotifications || []
@@ -213,6 +221,7 @@ export function Community({ app }) {
           value={content}
           profiles={profiles}
           onChange={setContent}
+          onSubmit={() => publish({ preventDefault() {} })}
           rows={3}
           placeholder="Compartilhe algo ou anexe só uma música. Digite @ para mencionar"
         />
@@ -250,6 +259,26 @@ export function Community({ app }) {
                       : 'mencionou você em uma publicação'}
                   </small>
                 </span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+      {newProfiles.length > 0 && (
+        <Section title="Novos na Harmony">
+          <div className="new-people-grid">
+            {newProfiles.map((profile) => (
+              <button
+                type="button"
+                className="new-person-card"
+                key={profile.id}
+                onClick={() => setProfilePopup(profile)}
+              >
+                <Avatar profile={profile} />
+                <div>
+                  <b>{profile.display_name || 'Novo membro'}</b>
+                  <small>@{profile.username}</small>
+                </div>
               </button>
             ))}
           </div>
@@ -343,6 +372,7 @@ export function Community({ app }) {
                         value={replyDrafts[post.id] || ''}
                         profiles={profiles}
                         onChange={(value) => setReplyDrafts((current) => ({ ...current, [post.id]: value }))}
+                        onSubmit={() => submitReply({ preventDefault() {} }, post)}
                         placeholder="Escreva uma resposta... Use @ para mencionar"
                         rows={2}
                         required

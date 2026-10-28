@@ -105,7 +105,7 @@ export function Retrospective({ app }) {
                 <div className="rank" key={name}>
                   <span>{index + 1}</span>
                   <b>{name}</b>
-                  <i style={{ width: `${(count / artists[0][1]) * 100}%` }} />
+                  <i style={{ width: `${Math.min(100, Math.max(0, (count / Math.max(artists[0]?.[1] || 1, 1)) * 100))}%` }} />
                   <small>{count} plays</small>
                 </div>
               ))}

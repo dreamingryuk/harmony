@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, Music2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Users, UserRound, BarChart3, Settings } from 'lucide-react'
+import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, MoonStar, Music2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SunMedium, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { nextLoopMode, playNext, playPrevious, queueState, setLoop, setShuffle, trackJson } from '../utils/track'
-import { Avatar, CoverArt } from './Media'
+import { Avatar, CoverArt, MarqueeText } from './Media'
 import { AddToPlaylistDialog } from './PlaylistComponents'
 import { YouTubePlayer } from './YouTubePlayer'
 
@@ -34,6 +34,45 @@ const toastText = (notification) => {
   if (notification.kind === 'comment_reply') return 'respondeu em uma publicação que você acompanha.'
   if (notification.kind === 'comment_mention') return 'mencionou você em uma resposta.'
   return 'mencionou você em uma publicação.'
+}
+
+function getThemePreference() {
+  const stored = localStorage.getItem('harmony-theme')
+  if (stored === 'light' || stored === 'dark') return stored
+  return 'auto'
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(getThemePreference())
+
+  useEffect(() => {
+    const sync = () => setTheme(getThemePreference())
+    sync()
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener?.('change', sync)
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'harmony-theme') sync()
+    })
+    return () => {
+      media.removeEventListener?.('change', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  const cycleTheme = () => {
+    const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'auto' : 'light'
+    setTheme(nextTheme)
+    localStorage.setItem('harmony-theme', nextTheme)
+    const root = document.documentElement
+    root.dataset.theme = nextTheme === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : nextTheme
+  }
+
+  const label = theme === 'dark' ? 'Tema escuro' : theme === 'light' ? 'Tema claro' : 'Tema automático'
+  return (
+    <button type="button" className="theme-toggle" onClick={cycleTheme} aria-label={label} title={label}>
+      {theme === 'dark' ? <MoonStar size={18} /> : <SunMedium size={18} />}
+    </button>
+  )
 }
 
 export function Shell({ app, children }) {
@@ -86,6 +125,9 @@ export function Shell({ app, children }) {
           ))}
         </nav>
         <div className="side-bottom">
+          <div className="sidebar-top-actions">
+            <ThemeToggle />
+          </div>
           <button className="profile-short" onClick={() => navigate('/perfil')}>
             <Avatar profile={app.profile} />
             {app.profile?.display_name || 'Ouvinte'}
@@ -366,7 +408,7 @@ export function Player({ app, onHeightChange }) {
         <CoverArt className="player-cover" src={track.coverUrl} alt={`Capa de ${track.album || track.title}`} />
       </div>
       <div className="player-track">
-        <b>{track.title}</b>
+        <MarqueeText text={track.title} ariaLabel={track.title} className="player-title" />
         <span>{track.artists}</span>
       </div>
       <div className="player-controls">

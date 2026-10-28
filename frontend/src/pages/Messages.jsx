@@ -310,6 +310,7 @@ export function Messages({ app }) {
                 <MentionComposer
                   value={text}
                   onChange={setText}
+                  onSubmit={() => send({ preventDefault() {} })}
                   profiles={profiles}
                   placeholder="Digite uma mensagem..."
                   rows={2}

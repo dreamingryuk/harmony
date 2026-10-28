@@ -502,7 +502,7 @@ export function Discover({ app }) {
 
           <section className="section">
             <div className="section-head">
-              <h2>Playlists em alta</h2>
+              <h2>Playlists do Harmony em alta</h2>
               <p className="hint">As playlists públicas mais recentes da comunidade.</p>
             </div>
             {publicPlaylists.length ? (
