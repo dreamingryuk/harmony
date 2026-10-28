@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Heart, Play } from 'lucide-react'
+import { Heart, Music2, Play } from 'lucide-react'
 import { FALLBACK_COVER } from '../lib/spotify'
 import { play } from '../utils/track'
 

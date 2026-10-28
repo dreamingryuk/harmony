@@ -55,7 +55,7 @@ button {
   position: fixed;
   inset: 0 auto 0 0;
   width: 244px;
-  background: #fff;
+  background: var(--bg-elevated);
   border-right: 1px solid var(--line);
   padding: 22px 14px;
   display: flex;
@@ -236,7 +236,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: 13px;
   padding: 0 14px;
@@ -1187,12 +1187,12 @@ button {
 .text-button { border: 0; background: transparent; color: #087456; padding: 3px 0; text-align: left; font-weight: 700; font-size: 12px; }
 .danger-zone { border-color: #f2c7d0 !important; }
 .danger-zone h3 { color: #a12644; display: flex; gap: 6px; align-items: center; }
-.settings-section { margin-top: 27px; padding: 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; }
+.settings-section { margin-top: 27px; padding: 22px; border: 1px solid var(--line); border-radius: 15px; background: var(--bg-elevated); color: var(--text); }
 .settings-section > h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 8px; }
 .settings-description { margin: 6px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .settings-form { display: grid; gap: 9px; max-width: 600px; margin-top: 16px; }
 .settings-form > label:not(.settings-toggle) { font-size: 13px; font-weight: 700; }
-.settings-form input:not([type="checkbox"]) { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 10px; font: inherit; outline-color: var(--green); }
+.settings-form input:not([type="checkbox"]) { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 10px; font: inherit; outline-color: var(--green); background: var(--bg); color: var(--text); }
 .settings-form h3 { margin: 8px 0 0; font-size: 16px; }
 .settings-form p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .settings-form .primary, .settings-form .secondary, .settings-form .danger-button { justify-self: start; margin-top: 5px; }
@@ -2077,7 +2077,9 @@ html[data-theme='dark'] .music-source select,
 html[data-theme='dark'] .friend-add input,
 html[data-theme='dark'] .banner-types label,
 html[data-theme='dark'] .banner-color-field input,
-html[data-theme='dark'] .banner-gradient-fields input {
+html[data-theme='dark'] .banner-gradient-fields input,
+html[data-theme='dark'] .settings-section,
+html[data-theme='dark'] .settings-form input:not([type="checkbox"]) {
   background: var(--bg-elevated);
   color: var(--text);
   border-color: var(--border);
