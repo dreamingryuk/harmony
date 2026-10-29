@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { spotifyPlaylists, spotifyPlaylistTracks } from '../lib/spotify'
 import { fromJson, trackJson } from '../utils/track'
 import { playPlaylist } from '../utils/playlist'
-import { CoverArt, Empty, Page, Section, TrackRow } from '../components/Media'
+import { Empty, Page, Section, TrackRow } from '../components/Media'
 import { PlaylistCard, PlaylistDialog } from '../components/PlaylistComponents'
 
 export function Library({ app }) {
   const [playlists, setPlaylists] = useState([]),
     [saved, setSaved] = useState([]),
-    [imports, setImports] = useState([]),
-    [loading, setLoading] = useState(false),
     [editor, setEditor] = useState(null)
   const load = useCallback(async () => {
     if (!configured) return
@@ -31,58 +28,15 @@ export function Library({ app }) {
   }, [load])
   const toggle = async (track) => {
     if (!configured) return alert('Configure o Supabase para favoritar.')
-    const existing = saved.find((item) => item.spotify_id === track.spotifyId)
+    const existing = saved.find((item) => item.spotify_id === (track.mediaId || track.youtubeId))
     if (existing) await supabase.from('saved_tracks').delete().eq('id', existing.id)
     else
       await supabase.from('saved_tracks').insert({
         user_id: app.user.id,
-        spotify_id: track.spotifyId,
+        spotify_id: track.mediaId || track.youtubeId,
         track: trackJson(track),
       })
     load()
-  }
-  const importList = async () => {
-    try {
-      setLoading(true)
-      setImports(await spotifyPlaylists())
-    } catch (error) {
-      alert(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-  const importPlaylist = async (source) => {
-    try {
-      setLoading(true)
-      const tracks = await spotifyPlaylistTracks(source.id)
-      const { data: playlist, error } = await supabase
-        .from('playlists')
-        .insert({
-          owner_id: app.user.id,
-          title: source.name,
-          description: source.description || '',
-          is_public: app.preferences?.default_playlist_public ?? false,
-          imported_spotify_id: source.id,
-        })
-        .select()
-        .single()
-      if (error) throw error
-      if (tracks.length)
-        await supabase.from('playlist_tracks').insert(
-          tracks.map((track, position) => ({
-            playlist_id: playlist.id,
-            position,
-            track: trackJson(track),
-            spotify_id: track.spotifyId,
-          }))
-        )
-      await load()
-      setImports([])
-    } catch (error) {
-      alert(error.message)
-    } finally {
-      setLoading(false)
-    }
   }
   const savedQueue = saved.map((item) => fromJson(item.track)).filter(Boolean)
   return (
@@ -91,26 +45,7 @@ export function Library({ app }) {
         <button className="primary" onClick={() => setEditor({})}>
           <Plus /> Nova playlist
         </button>
-        <button className="secondary" onClick={importList} disabled={loading}>
-          Importar do Spotify
-        </button>
       </div>
-      {imports.length > 0 && (
-        <Section title="Escolha playlists para importar">
-          {imports.map((item) => (
-            <article className="import-row" key={item.id}>
-              <CoverArt src={item.images?.[0]?.url} alt={`Capa de ${item.name}`} />
-              <span>
-                <b>{item.name}</b>
-                <small>{item.tracks.total} faixas</small>
-              </span>
-              <button className="secondary" onClick={() => importPlaylist(item)}>
-                Importar
-              </button>
-            </article>
-          ))}
-        </Section>
-      )}
       <Section title={`Suas playlists${playlists.length ? ` (${playlists.length})` : ''}`}>
         {playlists.length ? (
           <div className="playlist-grid">
@@ -125,7 +60,7 @@ export function Library({ app }) {
             ))}
           </div>
         ) : (
-          <Empty text="Crie uma playlist ou importe uma do Spotify." />
+          <Empty text="Crie uma playlist para guardar suas músicas." />
         )}
       </Section>
       <Section title="Favoritas">

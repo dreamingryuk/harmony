@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, Eye, ListMusic, Pencil, Play, Plus, Shuffle, Trash2, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { searchTracks } from '../lib/spotify'
 import { searchYoutubeTracks } from '../lib/youtube'
 import { useMusicConnections } from '../hooks/useMusicConnections'
 import { attachmentTrack, fromJson, isPlaylistAttachment, play, playAll, playlistAttachment, trackJson } from '../utils/track'
 import { loadPlaylist, playlistQueue, playPlaylist, sortedRows } from '../utils/playlist'
 import { CoverArt } from './Media'
 
-const platformLabel = (platform) => (platform === 'youtube' ? 'YouTube Music' : 'Spotify')
 
 export function AttachmentCard({ attachment, onOpenPlaylist, compact = false }) {
   const [busy, setBusy] = useState(false)
@@ -132,16 +130,11 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
     is_public: playlist?.is_public ?? app.preferences?.default_playlist_public ?? false,
   })
   const [tracks, setTracks] = useState(() => sortedRows(playlist?.playlist_tracks))
-  const [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false), [platform, setPlatform] = useState('spotify')
+  const [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
   const [savedCopy, setSavedCopy] = useState(false)
   const isNew = !playlist?.id
   const isOwner = playlist?.owner_id === app.user.id
   const { connections } = useMusicConnections(app.user.id)
-  const availablePlatforms = Object.entries(connections).filter(([, connected]) => connected).map(([name]) => name)
-
-  useEffect(() => {
-    if (!connections[platform] && availablePlatforms.length) setPlatform(availablePlatforms[0])
-  }, [availablePlatforms, connections, platform])
 
   // Verifica se esta playlist pública já foi copiada para a biblioteca do usuário.
   useEffect(() => {
@@ -185,14 +178,10 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
   }
   const search = async (event) => {
     event.preventDefault(); if (!query.trim()) return
-    if (!connections[platform]) return alert('Conecte uma plataforma de música para buscar faixas.')
+    if (!connections.youtube) return alert('Ative o YouTube Music na aba Descobrir para buscar faixas.')
     try {
       setBusy(true)
-      setResults(
-        platform === 'youtube'
-          ? await searchYoutubeTracks(query.trim())
-          : await searchTracks(query.trim())
-      )
+      setResults(await searchYoutubeTracks(query.trim()))
     } catch (error) {
       alert(error.message)
     } finally {
@@ -203,7 +192,7 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
     orderedTracks.reduce((max, row) => Math.max(max, (row.position ?? 0) + 1), 0)
   const addTrack = async (track) => {
     if (isNew) return alert('Salve a playlist antes de adicionar faixas.')
-    const { data, error } = await supabase.from('playlist_tracks').insert({ playlist_id: playlist.id, spotify_id: track.spotifyId, position: nextPosition(), track: trackJson(track) }).select().single()
+    const { data, error } = await supabase.from('playlist_tracks').insert({ playlist_id: playlist.id, spotify_id: track.mediaId || track.youtubeId, position: nextPosition(), track: trackJson(track) }).select().single()
     if (error) return alert(error.message.includes('unique') ? 'Essa faixa já está na playlist.' : error.message)
     setTracks((items) => [...items, data]); setResults([]); setQuery('')
   }
@@ -352,11 +341,7 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
         <p className="hint">Use as setas ao lado de cada faixa para organizar a ordem da playlist.</p>
       )}
     </div>
-    {!readOnly && !isNew && <>{availablePlatforms.length > 1 && <label className="music-source">Buscar em
-      <select value={platform} onChange={(event) => { setPlatform(event.target.value); setResults([]) }}>
-        {availablePlatforms.map((name) => <option key={name} value={name}>{platformLabel(name)}</option>)}
-      </select>
-    </label>}{!availablePlatforms.length && <p className="hint">Conecte uma plataforma na aba Descobrir para buscar faixas.</p>}<form className="inline-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={platform === 'youtube' ? 'Buscar faixa no YouTube' : 'Buscar faixa no Spotify'} disabled={!connections[platform]} /><button className="secondary" disabled={busy || !connections[platform]}>Buscar</button></form>{results.map((track) => <button className="search-result" key={track.spotifyId} onClick={() => addTrack(track)}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}</>}
+    {!readOnly && !isNew && <>{!connections.youtube && <p className="hint">Ative o YouTube Music na aba Descobrir para buscar faixas.</p>}<form className="inline-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar faixa no YouTube" disabled={!connections.youtube} /><button className="secondary" disabled={busy || !connections.youtube}>Buscar</button></form>{results.map((track) => <button className="search-result" key={track.mediaId || track.youtubeId} onClick={() => addTrack(track)}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}</>}
     {readOnly && (
       <footer className="modal-actions playlist-view-actions">
         <button type="button" className="primary" disabled={!modalTracks.length} onClick={() => playAll(modalQueue, { shuffle: false })}>
@@ -377,24 +362,15 @@ export function PlaylistDialog({ playlist, app, onClose, onSaved, readOnly = fal
 }
 
 export function SharePicker({ playlists = [], attachment, onChange, userId }) {
-  const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false), [platform, setPlatform] = useState('spotify')
+  const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]), [busy, setBusy] = useState(false)
   const { connections } = useMusicConnections(userId)
-  const availablePlatforms = Object.entries(connections).filter(([, connected]) => connected).map(([name]) => name)
-
-  useEffect(() => {
-    if (!connections[platform] && availablePlatforms.length) setPlatform(availablePlatforms[0])
-  }, [availablePlatforms, connections, platform])
 
   const search = async () => {
     if (!query.trim()) return
-    if (!connections[platform]) return alert('Conecte uma plataforma de música para pesquisar.')
+    if (!connections.youtube) return alert('Ative o YouTube Music na aba Descobrir para pesquisar.')
     try {
       setBusy(true)
-      setResults(
-        platform === 'youtube'
-          ? await searchYoutubeTracks(query.trim())
-          : await searchTracks(query.trim())
-      )
+      setResults(await searchYoutubeTracks(query.trim()))
     } catch (error) {
       alert(error.message)
     } finally {
@@ -409,14 +385,9 @@ export function SharePicker({ playlists = [], attachment, onChange, userId }) {
   return <div className="share-picker">
     {attachment ? <div className="attached"><AttachmentCard attachment={attachment} compact /><button type="button" className="icon" aria-label="Remover anexo" onClick={() => onChange(null)}><X /></button></div> : <button type="button" className="secondary small-button" onClick={() => setOpen(!open)}><Plus /> Música ou playlist</button>}
     {open && !attachment && <div className="share-menu">
-      {availablePlatforms.length > 1 && <label className="music-source">Pesquisar em
-        <select value={platform} onChange={(event) => { setPlatform(event.target.value); setResults([]) }}>
-          {availablePlatforms.map((name) => <option key={name} value={name}>{platformLabel(name)}</option>)}
-        </select>
-      </label>}
-      <div className="inline-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder={platform === 'youtube' ? 'Buscar música no YouTube' : 'Buscar música no Spotify'} disabled={!connections[platform]} /><button type="button" className="secondary" onClick={search} disabled={busy || !connections[platform]}>Buscar</button></div>
-      {!availablePlatforms.length && <p className="hint">Conecte uma plataforma na aba Descobrir para pesquisar músicas.</p>}
-      {results.map((track) => <button type="button" className="search-result" key={track.spotifyId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}
+      <div className="inline-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Buscar música no YouTube" disabled={!connections.youtube} /><button type="button" className="secondary" onClick={search} disabled={busy || !connections.youtube}>Buscar</button></div>
+      {!connections.youtube && <p className="hint">Ative o YouTube Music na aba Descobrir para pesquisar músicas.</p>}
+      {results.map((track) => <button type="button" className="search-result" key={track.mediaId || track.youtubeId} onClick={() => { onChange({ type: 'track', track: trackJson(track) }); setOpen(false) }}><CoverArt src={track.coverUrl} /><span><b>{track.title}</b><small>{track.artists}</small></span><Plus /></button>)}
       <b className="picker-label">Suas playlists públicas</b>
       {playlists.length ? playlists.map((playlist) => <button type="button" className="search-result" key={playlist.id} onClick={() => { onChange(playlistAttachment(playlist)); setOpen(false) }}><span className="playlist-art small"><ListMusic /></span><span><b>{playlist.title}</b><small>{playlist.playlist_tracks?.length || 0} faixas</small></span><Plus /></button>) : <p className="hint">Marque uma playlist como pública para compartilhá-la.</p>}
     </div>}

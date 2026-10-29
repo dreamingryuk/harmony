@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { disconnectSpotify, spotifyToken } from '../lib/spotify'
 import { connectYoutube, disconnectYoutube, isYoutubeConnected } from '../lib/youtube'
 
 function readConnections(userId) {
   return {
-    spotify: Boolean(spotifyToken()),
     youtube: isYoutubeConnected(userId),
   }
 }
@@ -28,7 +26,6 @@ export function useMusicConnections(userId) {
   return {
     connections,
     refresh,
-    disconnectSpotify,
     connectYoutube: () => connectYoutube(userId),
     disconnectYoutube: () => disconnectYoutube(userId),
   }

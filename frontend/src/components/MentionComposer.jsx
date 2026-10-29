@@ -59,6 +59,7 @@ export function MentionComposer({
   rows = 3,
   required = false,
   floatingSuggestions = false,
+  disabled = false,
 }) {
   const inputRef = useRef(null)
   const highlightRef = useRef(null)
@@ -98,6 +99,14 @@ export function MentionComposer({
       window.removeEventListener('scroll', updateAvailableHeight, true)
     }
   }, [floatingSuggestions, suggestions.length])
+
+  // Altura automática mantém mensagens longas confortáveis sem ocupar a tela.
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(input.scrollHeight, 160)}px`
+  }, [value])
 
   const updateValue = (nextValue, cursor) => {
     onChange(nextValue)
@@ -139,6 +148,7 @@ export function MentionComposer({
         className={className}
         value={value}
         rows={rows}
+        disabled={disabled}
         required={required}
         placeholder={placeholder}
         onScroll={(event) => {
@@ -156,7 +166,13 @@ export function MentionComposer({
             setMention(null)
             return
           }
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent?.isComposing) {
+          if (
+            event.key === 'Enter' &&
+            !event.shiftKey &&
+            !event.nativeEvent?.isComposing &&
+            event.keyCode !== 229 &&
+            !disabled
+          ) {
             const trimmed = value.trim()
             if (trimmed && onSubmit) {
               event.preventDefault()

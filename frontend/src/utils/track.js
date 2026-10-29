@@ -10,8 +10,8 @@ import {
 } from './queue'
 
 export const trackJson = (track) => ({
-  platform: track.platform || 'spotify',
-  spotify_id: track.spotifyId,
+  platform: track.platform || 'youtube',
+  media_id: track.mediaId || track.youtubeId || track.spotifyId,
   youtube_id: track.youtubeId || null,
   uri: track.uri,
   title: track.title,
@@ -19,15 +19,14 @@ export const trackJson = (track) => ({
   album: track.album,
   cover_url: track.coverUrl,
   preview_url: track.previewUrl,
-  spotify_url: track.spotifyUrl || null,
-  external_url: track.externalUrl || track.spotifyUrl || null,
+  external_url: track.externalUrl || null,
   genres: track.genres || [],
 })
 
 export const fromJson = (track) =>
   track && {
-    platform: track.platform || (track.youtube_id ? 'youtube' : 'spotify'),
-    spotifyId: track.spotify_id,
+    platform: track.platform || 'youtube',
+    mediaId: track.media_id || track.youtube_id || track.spotify_id,
     youtubeId: track.youtube_id || null,
     uri: track.uri,
     title: track.title,
@@ -35,8 +34,7 @@ export const fromJson = (track) =>
     album: track.album,
     coverUrl: track.cover_url,
     previewUrl: track.preview_url,
-    spotifyUrl: track.spotify_url,
-    externalUrl: track.external_url || track.spotify_url,
+    externalUrl: track.external_url || null,
     genres: track.genres || [],
   }
 

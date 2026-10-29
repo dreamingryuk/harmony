@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Heart, MessageCircle, X } from 'lucide-react'
+import { Check, Heart, MessageCircle, Trash2, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { ProfilePopup } from '../components/ProfilePopup'
@@ -17,6 +17,14 @@ const snippet = (post) => {
   if (post?.content) return post.content
   if (post?.track?.title) return `🎵 ${post.track.title}`
   return 'uma publicação sem texto'
+}
+const relativeTime = (date) => {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(date).getTime()) / 60000))
+  if (minutes < 1) return 'agora'
+  if (minutes < 60) return `há ${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `há ${hours} h`
+  return `há ${Math.round(hours / 24)} d`
 }
 
 export function Notifications({ app }) {
@@ -123,6 +131,12 @@ export function Notifications({ app }) {
       setBusy('')
     }
   }
+  const removeNotification = async (id) => {
+    if (!window.confirm('Excluir esta notificação do seu histórico?')) return
+    const { error: deleteError } = await supabase.from('community_notifications').delete().eq('id', id).eq('recipient_id', userId)
+    if (deleteError) return setError(`Não foi possível excluir: ${deleteError.message}`)
+    window.dispatchEvent(new Event('harmony-notifications-changed'))
+  }
 
   const openPost = (item) => {
     // A página da comunidade marca como lida quando a publicação aparece.
@@ -205,7 +219,7 @@ export function Notifications({ app }) {
               const [text, Icon] = kinds[item.kind] || kinds.post_mention
               const post = posts[item.post_id]
               return (
-                <li key={item.id} className="notification-item">
+                <li key={item.id} className={`notification-item ${item.read_at ? 'read' : 'unread'}`}>
                   <button
                     type="button"
                     className="avatar-link"
@@ -222,9 +236,11 @@ export function Notifications({ app }) {
                     <span>
                       <b>{actorName(item)}</b> {text}
                       <small>{snippet(post)}</small>
+                      <time dateTime={item.created_at}>{relativeTime(item.created_at)}</time>
                     </span>
                     <Icon />
                   </button>
+                  <button type="button" className="icon" aria-label="Excluir notificação" onClick={() => removeNotification(item.id)}><Trash2 /></button>
                 </li>
               )
             })}

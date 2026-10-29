@@ -1,4 +1,4 @@
-import { FALLBACK_COVER } from './spotify'
+import { FALLBACK_COVER } from './media'
 
 const YOUTUBE_API = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_VIDEOS_API = 'https://www.googleapis.com/youtube/v3/videos'
@@ -40,7 +40,7 @@ function toYoutubeTrack(item) {
   return {
     platform: 'youtube',
     youtubeId: videoId,
-    spotifyId: `youtube:${videoId}`,
+    mediaId: `youtube:${videoId}`,
     uri: `https://www.youtube.com/watch?v=${videoId}`,
     title: item.snippet.title,
     artists: item.snippet.channelTitle || 'YouTube',

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { configured, ensureProfile, getAccountPreferences, supabase } from '../lib/supabase'
+import { ACCOUNT_LIMIT, clearAccounts, forgetAccount, rememberAccount, savedAccounts } from '../utils/accounts'
 
 const demoUser = { id: 'demo-user', email: 'demo@synq.app' }
 
@@ -50,6 +51,7 @@ export function useSynq() {
     [profile, setProfile] = useState(null),
     [preferences, setPreferences] = useState(null),
     [passwordRecovery, setPasswordRecovery] = useState(false),
+    [accounts, setAccounts] = useState(() => savedAccounts()),
     [ready, setReady] = useState(!configured)
   const refreshProfile = useCallback(async (authUser) => {
     if (!configured)
@@ -84,6 +86,7 @@ export function useSynq() {
         if (error) throw error
         setUser(data.session?.user || null)
         if (data.session?.user) {
+          setAccounts(rememberAccount(data.session))
           await Promise.all([
             refreshProfile(data.session.user).catch((profileError) => {
               console.error('Não foi possível carregar o perfil:', profileError)
@@ -98,6 +101,7 @@ export function useSynq() {
       .finally(() => setReady(true))
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null)
+      if (session) setAccounts(rememberAccount(session))
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (event === 'SIGNED_OUT') setPasswordRecovery(false)
       if (session?.user) {
@@ -119,6 +123,17 @@ export function useSynq() {
     })
     return () => listener.subscription.unsubscribe()
   }, [refreshPreferences, refreshProfile])
+  const switchAccount = useCallback(async (account) => {
+    if (!configured || !account?.access_token || !account?.refresh_token) return false
+    const { error } = await supabase.auth.setSession({ access_token: account.access_token, refresh_token: account.refresh_token })
+    if (error) { setAccounts(forgetAccount(account.id)); return false }
+    return true
+  }, [])
+  const removeAccount = useCallback((id) => setAccounts(forgetAccount(id)), [])
+  const signOutAllAccounts = useCallback(async () => {
+    clearAccounts(); setAccounts([])
+    if (configured) await supabase.auth.signOut({ scope: 'global' })
+  }, [])
   return {
     user,
     profile,
@@ -128,6 +143,11 @@ export function useSynq() {
     refreshPreferences,
     passwordRecovery,
     setPasswordRecovery,
+    accounts,
+    accountLimit: ACCOUNT_LIMIT,
+    switchAccount,
+    removeAccount,
+    signOutAllAccounts,
     demo: !configured,
   }
 }
