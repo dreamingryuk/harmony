@@ -236,6 +236,7 @@ export function Community({ app }) {
           onChange={setContent}
           onSubmit={() => publish({ preventDefault() {} })}
           rows={3}
+          disabled={publishing}
           placeholder="Compartilhe algo ou anexe só uma música. Digite @ para mencionar"
         />
         <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />

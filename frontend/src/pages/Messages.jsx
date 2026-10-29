@@ -24,7 +24,8 @@ export function Messages({ app }) {
     [search, setSearch] = useState(''),
     [friendshipError, setFriendshipError] = useState(''),
     [contactIds, setContactIds] = useState([]),
-    [profilePopup, setProfilePopup] = useState(null)
+    [profilePopup, setProfilePopup] = useState(null),
+    [sending, setSending] = useState(false)
   const chatRef = useRef(null)
 
   useEffect(() => {
@@ -212,15 +213,18 @@ export function Messages({ app }) {
 
   const send = async (event) => {
     event.preventDefault()
-    if ((!text.trim() && !attachment) || !selected) return
-    const { error } = await supabase.from('messages').insert({
-      sender_id: app.user.id,
-      recipient_id: selected.id,
-      content: text.trim(),
-      track: attachment,
-    })
-    if (error) return setNotice(`Não foi possível enviar: ${error.message}`)
-    setText(''); setAttachment(null); load()
+    if (sending || (!text.trim() && !attachment) || !selected) return
+    setSending(true)
+    try {
+      const { error } = await supabase.from('messages').insert({
+        sender_id: app.user.id,
+        recipient_id: selected.id,
+        content: text.trim(),
+        track: attachment,
+      })
+      if (error) return setNotice(`Não foi possível enviar: ${error.message}`)
+      setText(''); setAttachment(null); load()
+    } finally { setSending(false) }
   }
   const requestNotifications = async () => {
     if (!('Notification' in window)) return setNotice('Este navegador não suporta notificações.')
@@ -315,9 +319,10 @@ export function Messages({ app }) {
                   placeholder="Digite uma mensagem..."
                   rows={2}
                   floatingSuggestions
+                  disabled={sending}
                 />
                 <SharePicker playlists={playlists} attachment={attachment} onChange={setAttachment} userId={app.user.id} />
-                <button className="primary">
+                <button className="primary" disabled={sending}>
                   <Send />
                 </button>
               </form>
