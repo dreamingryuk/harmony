@@ -38,6 +38,10 @@ html[data-theme='dark'] {
   --soft: var(--bg);
 }
 
+* {
+  box-sizing: border-box;
+}
+
 button,
 input,
 textarea {
@@ -1975,6 +1979,8 @@ input[type='checkbox']:disabled {
 .account-all-out { color: var(--danger, #b72e49); }
 
 .marquee-wrap {
+  display: block;
+  width: 100%;
   min-width: 0;
   overflow: hidden;
   mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
@@ -1984,6 +1990,7 @@ input[type='checkbox']:disabled {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  width: max-content;
   min-width: 0;
   white-space: nowrap;
 }
@@ -2099,7 +2106,14 @@ html[data-theme='dark'] .banner-types label,
 html[data-theme='dark'] .banner-color-field input,
 html[data-theme='dark'] .banner-gradient-fields input,
 html[data-theme='dark'] .settings-section,
-html[data-theme='dark'] .settings-form input:not([type="checkbox"]) {
+html[data-theme='dark'] .settings-form input:not([type="checkbox"]),
+html[data-theme='dark'] .settings-grid form,
+html[data-theme='dark'] .modal,
+html[data-theme='dark'] .share-menu,
+html[data-theme='dark'] .genre-input,
+html[data-theme='dark'] .genre-options,
+html[data-theme='dark'] .empty,
+html[data-theme='dark'] .music-platforms button {
   background: var(--bg-elevated);
   color: var(--text);
   border-color: var(--border);

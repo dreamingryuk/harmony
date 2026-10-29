@@ -51,9 +51,29 @@ export function MarqueeText({ text, subtitle, ariaLabel, className = '' }) {
 
   useEffect(() => {
     const element = ref.current
-    if (!element) return
-    const shouldAnimate = element.scrollWidth > element.clientWidth + 3
-    setActive(shouldAnimate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    if (!element || !text) return
+
+    const update = () => {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const shouldAnimate = element.scrollWidth > element.clientWidth + 3
+      setActive(shouldAnimate && !prefersReducedMotion)
+    }
+
+    update()
+
+    const onResize = () => update()
+    window.addEventListener('resize', onResize)
+
+    let observer
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(onResize)
+      observer.observe(element)
+    }
+
+    return () => {
+      window.removeEventListener('resize', onResize)
+      observer?.disconnect()
+    }
   }, [text, subtitle])
 
   return (
