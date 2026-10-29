@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { configured } from './lib/supabase'
+import { applyTheme, getStoredTheme, THEME_STORAGE_KEY } from './lib/themes'
 import { useSynq, useUnreadMessages } from './hooks/useSynq'
 import { useMentionNotifications } from './hooks/useMentionNotifications'
 import { Shell } from './components/Shell'
@@ -17,19 +18,6 @@ import { Profile } from './pages/Profile'
 import { AccountSettings } from './pages/AccountSettings'
 import { ResetPassword } from './pages/ResetPassword'
 import './App.css'
-
-const THEME_KEY = 'harmony-theme'
-
-function getSystemTheme() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
-function applyTheme(theme) {
-  const choice = theme === 'dark' || theme === 'light' ? theme : getSystemTheme()
-  document.documentElement.dataset.theme = choice
-  const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', choice === 'dark' ? '#0d1a1b' : '#f3f6f5')
-}
 
 function AppRoutes() {
   const location = useLocation()
@@ -72,25 +60,14 @@ function AppRoutes() {
 
 export default function App() {
   useEffect(() => {
-    const syncTheme = () => {
-      const stored = localStorage.getItem(THEME_KEY)
-      applyTheme(stored || 'auto')
-    }
-    syncTheme()
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => {
-      const current = localStorage.getItem(THEME_KEY)
-      if (current === 'auto' || !current) applyTheme('auto')
-    }
-    media.addEventListener?.('change', onChange)
+    // Garante que o tema salvo (ou o padrão) fique aplicado em todas as páginas.
+    applyTheme(getStoredTheme())
+    // Outra aba alterou o tema: re-aplica aqui.
     const onStorage = (event) => {
-      if (event.key === THEME_KEY) applyTheme(event.newValue || 'auto')
+      if (event.key === THEME_STORAGE_KEY) applyTheme(getStoredTheme())
     }
     window.addEventListener('storage', onStorage)
-    return () => {
-      media.removeEventListener?.('change', onChange)
-      window.removeEventListener('storage', onStorage)
-    }
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   return (

@@ -8,10 +8,15 @@
     <meta name="description" content="Descubra, compartilhe e converse sobre música no Harmony." />
     <script>
       (function () {
-        const stored = localStorage.getItem('harmony-theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const theme = stored === 'dark' || stored === 'light' ? stored : prefersDark ? 'dark' : 'light';
+        // Aplica o tema salvo antes do React montar para evitar flash de tema errado.
+        var ids = ['minimal-light', 'botanical', 'editorial', 'soft-pastel', 'neo-rutalism', 'midnight', 'oled-neon', 'warm-sunset', 'cyber-terminal', 'slate-professional'];
+        var dark = ['midnight', 'oled-neon', 'warm-sunset', 'cyber-terminal', 'slate-professional'];
+        var legacy = { dark: 'midnight', light: 'minimal-light', auto: 'minimal-light' };
+        var stored = null;
+        try { stored = localStorage.getItem('harmony-theme'); } catch (e) {}
+        var theme = ids.indexOf(stored) !== -1 ? stored : legacy[stored] || 'minimal-light';
         document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.mode = dark.indexOf(theme) !== -1 ? 'dark' : 'light';
       })();
     </script>
     <title>Harmony — sua comunidade musical</title>

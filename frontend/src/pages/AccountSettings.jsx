@@ -3,14 +3,40 @@ import { useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { youtubeApiKey } from '../lib/youtube'
+import { THEMES, getStoredTheme, setTheme } from '../lib/themes'
 import { useMusicConnections } from '../hooks/useMusicConnections'
 import { Page } from '../components/Media'
 import { PasswordField } from '../components/PasswordField'
 import { browserDescription, passwordPolicyError, passwordStrength } from '../utils/account'
 
+// Abas das configurações; o tema é o primeiro contato de quem quer personalizar.
+const SETTINGS_TABS = [
+  ['temas', 'Temas'],
+  ['conta', 'Conta'],
+  ['seguranca', 'Segurança'],
+  ['sessoes', 'Sessões'],
+  ['perigo', 'Zona de perigo'],
+]
+
+// Miniatura do tema com as cores do wireframe (não afeta o tema real do app).
+function ThemePreview({ theme }) {
+  return (
+    <span className="theme-preview" aria-hidden="true">
+      <span className="theme-preview-side" style={{ background: theme.preview.sidebar }} />
+      <span className="theme-preview-main">
+        <span className="theme-preview-banner" style={{ background: theme.preview.accent }} />
+        <span className="theme-preview-line" style={{ background: theme.preview.text }} />
+        <span className="theme-preview-line short" style={{ background: theme.preview.text }} />
+      </span>
+    </span>
+  )
+}
+
 export function AccountSettings({ app }) {
   const navigate = useNavigate()
   const { connections, connectYoutube, disconnectYoutube } = useMusicConnections(app.user?.id)
+  const [activeTab, setActiveTab] = useState('temas')
+  const [activeTheme, setActiveTheme] = useState(() => getStoredTheme())
   const [profileForm, setProfileForm] = useState({
     display_name: '',
     username: '',
@@ -76,6 +102,11 @@ export function AccountSettings({ app }) {
   const notify = (type, text) => setFeedback({ type, text })
   const togglePassword = (key) =>
     setShowPasswords((current) => ({ ...current, [key]: !current[key] }))
+
+  // Aplica o tema no documento e persiste; vale para todas as páginas.
+  const selectTheme = (themeId) => {
+    setActiveTheme(setTheme(themeId))
+  }
 
   const toggleMusicPlatform = async (platform) => {
     setMusicNotice('')
@@ -359,29 +390,47 @@ export function AccountSettings({ app }) {
           {feedback.text}
         </p>
       )}
+      <nav className="settings-tabs" aria-label="Seções das configurações">
+        {SETTINGS_TABS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            aria-current={activeTab === id ? 'page' : undefined}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      {activeTab === 'temas' && (
+        <section className="settings-section" aria-labelledby="settings-themes-title">
+          <h2 id="settings-themes-title">Temas</h2>
+          <p className="settings-description">
+            Escolha a aparência do Harmony. O tema é aplicado em todas as páginas e fica salvo neste navegador.
+          </p>
+          <div className="theme-grid" role="radiogroup" aria-label="Temas disponíveis">
+            {THEMES.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                role="radio"
+                aria-checked={activeTheme === theme.id}
+                className={`theme-card${activeTheme === theme.id ? ' selected' : ''}`}
+                onClick={() => selectTheme(theme.id)}
+              >
+                <ThemePreview theme={theme} />
+                <b>{theme.name}</b>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {activeTab === 'temas' && (
       <section className="settings-section" aria-labelledby="settings-music-title">
         <h2 id="settings-music-title">Aparência e música</h2>
-        <p className="settings-description">Defina o tema do app e use o YouTube como plataforma de reprodução local.</p>
+        <p className="settings-description">Use o YouTube como plataforma de reprodução local.</p>
         {musicNotice && <p className="notice" role="status">{musicNotice}</p>}
         <div className="music-service-list">
-          <article className="music-service">
-            <div>
-              <b>Tema</b>
-              <span>{localStorage.getItem('harmony-theme') === 'dark' ? 'Escuro' : localStorage.getItem('harmony-theme') === 'light' ? 'Claro' : 'Automático'}</span>
-            </div>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                const current = localStorage.getItem('harmony-theme') || 'auto'
-                const next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark'
-                localStorage.setItem('harmony-theme', next)
-                document.documentElement.dataset.theme = next === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : next
-              }}
-            >
-              Alternar tema
-            </button>
-          </article>
           <article className="music-service">
             <div>
               <b>YouTube Music</b>
@@ -394,6 +443,8 @@ export function AccountSettings({ app }) {
         </div>
         {!youtubeApiKey() && <p className="hint">A busca do YouTube precisa ser configurada pelo administrador do site com VITE_YOUTUBE_API_KEY. Nenhuma conta Google ou assinatura Premium é necessária para usar o player incorporado.</p>}
       </section>
+      )}
+      {activeTab === 'conta' && (
       <section className="settings-section" aria-labelledby="settings-account-title">
         <h2 id="settings-account-title">Conta</h2>
         <p className="settings-description">Seus dados públicos e preferências do Harmony.</p>
@@ -438,7 +489,9 @@ export function AccountSettings({ app }) {
           )}
         </form>
       </section>
+      )}
 
+      {activeTab === 'seguranca' && (
       <section className="settings-section" aria-labelledby="settings-security-title">
         <h2 id="settings-security-title">Segurança</h2>
         <p className="settings-description">Reautentique com a senha atual para fazer alterações sensíveis.</p>
@@ -461,7 +514,9 @@ export function AccountSettings({ app }) {
           <button type="button" className="secondary" onClick={sendRecovery} disabled={Boolean(busy)}>{busy === 'recovery' ? 'Enviando...' : 'Enviar link de recuperação'}</button>
         </div>
       </section>
+      )}
 
+      {activeTab === 'sessoes' && (
       <section className="settings-section" aria-labelledby="settings-sessions-title">
         <h2 id="settings-sessions-title">Sessões</h2>
         <p className="settings-description">A sessão atual está ativa neste navegador. O Supabase permite encerrar todas as outras sessões, mas não disponibiliza pela API cliente uma lista confiável de dispositivos individuais.</p>
@@ -471,7 +526,9 @@ export function AccountSettings({ app }) {
         </article>
         <button className="text-button" type="button" onClick={endCurrentSession} disabled={Boolean(busy)}>{busy === 'current-session' ? 'Encerrando...' : 'Encerrar sessão deste dispositivo'}</button>
       </section>
+      )}
 
+      {activeTab === 'perigo' && (
       <section className="settings-section danger-zone settings-danger" aria-labelledby="settings-danger-title">
         <h2 id="settings-danger-title"><ShieldCheck /> Zona de perigo</h2>
         <p className="settings-description">A exclusão remove permanentemente perfil, playlists, mensagens, preferências e arquivos associados.</p>
@@ -483,6 +540,7 @@ export function AccountSettings({ app }) {
           <button className="danger-button" disabled={Boolean(busy) || !emailProvider}>{busy === 'delete' ? 'Excluindo conta...' : 'Excluir minha conta'}</button>
         </form>
       </section>
+      )}
     </Page>
   )
 }
