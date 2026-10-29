@@ -2017,6 +2017,14 @@ input[type='checkbox']:disabled {
   color: var(--text);
   text-align: left;
 }
+.new-person-skeleton {
+  min-height: 62px;
+  border: 0;
+  background: linear-gradient(90deg, var(--line) 25%, var(--bg) 45%, var(--line) 65%);
+  background-size: 220% 100%;
+  animation: harmony-skeleton 1.3s ease-in-out infinite;
+}
+@keyframes harmony-skeleton { to { background-position: -220% 0; } }
 
 .new-person-card > div {
   display: grid;

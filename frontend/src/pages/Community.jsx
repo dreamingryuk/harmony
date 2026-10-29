@@ -24,6 +24,7 @@ export function Community({ app }) {
     [openedPlaylist, setOpenedPlaylist] = useState(null),
     [profiles, setProfiles] = useState([]),
     [newProfiles, setNewProfiles] = useState([]),
+    [newProfilesLoading, setNewProfilesLoading] = useState(true),
     [openReplies, setOpenReplies] = useState(new Set()),
     [replyDrafts, setReplyDrafts] = useState({}),
     [profilePopup, setProfilePopup] = useState(null)
@@ -72,23 +73,35 @@ export function Community({ app }) {
   }, [app.user.id])
   useEffect(() => {
     if (!configured) return
-    supabase
-      .from('profiles')
-      .select('id, username, display_name, avatar_url, created_at')
-      .then(({ data, error: profileError }) => {
+    let active = true
+    setNewProfilesLoading(true)
+    Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, created_at')
+        .neq('id', app.user.id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase.from('follows').select('followed_id').eq('follower_id', app.user.id),
+    ]).then(([{ data, error: profileError }, { data: follows }]) => {
+        if (!active) return
+        setNewProfilesLoading(false)
         if (profileError) {
           setError(`Não foi possível carregar pessoas para mencionar: ${profileError.message}`)
           return
         }
-        const people = data || []
-        setProfiles(people)
-        setNewProfiles(
-          people
-            .filter((profile) => profile.id !== app.user.id)
-            .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-            .slice(0, 5)
-        )
+        const followed = new Set((follows || []).map((follow) => follow.followed_id))
+        const people = (data || []).filter((profile) => !followed.has(profile.id))
+        setNewProfiles(people)
+        // Menções precisam conhecer os apelidos públicos, mas esta consulta não
+        // é usada para montar o card de novos usuários (que permanece limitada).
+        supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .then(({ data: allProfiles }) => active && setProfiles(allProfiles || []))
       })
+      .catch(() => { if (active) { setNewProfiles([]); setNewProfilesLoading(false) } })
+    return () => { active = false }
   }, [app.user.id])
   useEffect(() => {
     const notificationId = new URLSearchParams(location.search).get('notificacao')
@@ -264,9 +277,10 @@ export function Community({ app }) {
           </div>
         </Section>
       )}
-      {newProfiles.length > 0 && (
+      {(newProfilesLoading || newProfiles.length > 0) && (
         <Section title="Novos na Harmony">
-          <div className="new-people-grid">
+          <div className="new-people-grid" aria-busy={newProfilesLoading}>
+            {newProfilesLoading && Array.from({ length: 5 }, (_, index) => <div className="new-person-card new-person-skeleton" key={index} />)}
             {newProfiles.map((profile) => (
               <button
                 type="button"
