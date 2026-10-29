@@ -1964,6 +1964,15 @@ input[type='checkbox']:disabled {
   justify-content: flex-end;
   margin-bottom: 12px;
 }
+.account-switcher { position: relative; padding: 0 12px 8px; }
+.account-menu { position: absolute; z-index: 30; left: 8px; bottom: 100%; width: 224px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-elevated); box-shadow: 0 12px 30px var(--shadow); padding: 7px; }
+.account-row { display: flex; align-items: center; gap: 4px; }
+.account-row > button:first-child { flex: 1; border: 0; color: var(--text); background: transparent; border-radius: 7px; padding: 8px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-row.current > button:first-child { background: color-mix(in srgb, var(--green) 13%, transparent); }
+.account-row small { display: block; color: var(--muted); font-size: 10px; }
+.account-add, .account-all-out { width: 100%; border: 0; text-align: left; border-radius: 7px; padding: 8px; background: transparent; color: var(--text); display: flex; gap: 7px; align-items: center; }
+.account-add:hover, .account-all-out:hover { background: var(--bg); }
+.account-all-out { color: var(--danger, #b72e49); }
 
 .marquee-wrap {
   min-width: 0;

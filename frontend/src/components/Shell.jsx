@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, MoonStar, Music2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SunMedium, Users, UserRound, BarChart3, Settings } from 'lucide-react'
+import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, MoonStar, Music2, Plus, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SunMedium, Trash2, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { nextLoopMode, playNext, playPrevious, queueState, setLoop, setShuffle, trackJson } from '../utils/track'
 import { Avatar, CoverArt, MarqueeText } from './Media'
@@ -80,6 +80,7 @@ export function Shell({ app, children }) {
   const navigate = useNavigate()
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [logoutError, setLogoutError] = useState('')
+  const [accountsOpen, setAccountsOpen] = useState(false)
   // A altura real do player reposiciona a barra inferior e o fim da página.
   const [playerHeight, setPlayerHeight] = useState(0)
   const logout = async () => {
@@ -96,6 +97,18 @@ export function Shell({ app, children }) {
     } finally {
       setLogoutBusy(false)
     }
+  }
+  const switchAccount = async (account) => {
+    if (account.id === app.user?.id) return setAccountsOpen(false)
+    const changed = await app.switchAccount(account)
+    if (!changed) setLogoutError('Essa sessão expirou. Entre novamente para adicioná-la de volta.')
+    setAccountsOpen(false)
+  }
+  const addAccount = async () => {
+    if ((app.accounts?.length || 0) >= app.accountLimit) return setLogoutError(`Você pode salvar no máximo ${app.accountLimit} contas neste navegador.`)
+    if (configured) await supabase.auth.signOut({ scope: 'local' })
+    setAccountsOpen(false)
+    navigate('/')
   }
   return (
     <div className="shell" style={{ '--player-h': `${playerHeight}px` }}>
@@ -132,6 +145,17 @@ export function Shell({ app, children }) {
             <Avatar profile={app.profile} />
             {app.profile?.display_name || 'Ouvinte'}
           </button>
+          <div className="account-switcher">
+            <button type="button" className="text-button" onClick={() => setAccountsOpen((open) => !open)}>Alternar conta</button>
+            {accountsOpen && <div className="account-menu">
+              {(app.accounts || []).map((account) => <div className={`account-row ${account.id === app.user?.id ? 'current' : ''}`} key={account.id}>
+                <button type="button" onClick={() => switchAccount(account)}>{account.email || 'Conta sem e-mail'}{account.id === app.user?.id && <small>Conta atual</small>}</button>
+                {account.id !== app.user?.id && <button type="button" className="icon" aria-label="Remover conta deste navegador" onClick={() => app.removeAccount(account.id)}><Trash2 /></button>}
+              </div>)}
+              <button type="button" className="account-add" onClick={addAccount}><Plus /> Adicionar outra conta</button>
+              <button type="button" className="account-all-out" onClick={() => app.signOutAllAccounts()}>Sair de todas</button>
+            </div>}
+          </div>
           <button className="logout" onClick={logout} disabled={logoutBusy}>
             <LogOut /> {logoutBusy ? 'Saindo...' : 'Sair'}
           </button>
