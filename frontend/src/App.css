@@ -1891,6 +1891,9 @@ input[type='checkbox']:disabled {
 .invite-actions button { display: inline-flex; align-items: center; gap: 5px; }
 .notification-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .notification-item { display: flex; align-items: center; gap: 11px; }
+.notification-item.unread { background: color-mix(in srgb, var(--green) 9%, var(--bg-elevated)); border-radius: 10px; }
+.notification-item.read { opacity: .78; }
+.notification-item time { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .notification-open {
   display: flex;
   align-items: center;

@@ -113,12 +113,12 @@ export function Shell({ app, children }) {
                   {app.unreadCount > 99 ? '99+' : app.unreadCount}
                 </span>
               )}
-              {to === '/notificacoes' && app.mentionNotifications?.length > 0 && (
+              {to === '/notificacoes' && app.unreadMentionCount > 0 && (
                 <span
                   className="nav-badge"
                   aria-label={`${app.mentionNotifications.length} notificações não lidas`}
                 >
-                  {app.mentionNotifications.length > 99 ? '99+' : app.mentionNotifications.length}
+                  {app.unreadMentionCount > 99 ? '99+' : app.unreadMentionCount}
                 </span>
               )}
             </NavLink>
@@ -178,7 +178,7 @@ export function Shell({ app, children }) {
               <span className="nav-short">{short}</span>
             </span>
             {to === '/mensagens' && app.unreadCount > 0 && <i className="nav-dot" />}
-            {to === '/notificacoes' && app.mentionNotifications?.length > 0 && (
+            {to === '/notificacoes' && app.unreadMentionCount > 0 && (
               <i className="nav-dot" />
             )}
           </NavLink>

@@ -128,3 +128,10 @@ drop trigger if exists notify_post_comments on public.post_comments;
 create trigger notify_post_comments
   after insert on public.post_comments
   for each row execute function public.notify_post_reply();
+
+-- Histórico: somente o destinatário pode remover um aviso da própria lista.
+grant delete on public.community_notifications to authenticated;
+drop policy if exists "users delete own community notifications" on public.community_notifications;
+create policy "users delete own community notifications"
+  on public.community_notifications for delete to authenticated
+  using (recipient_id = auth.uid());
