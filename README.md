@@ -147,7 +147,14 @@ npm run dev
 2. Ative Email em Authentication > Providers (Google opcional)
 3. Adicione `http://localhost:5173` em Authentication > URL Configuration
 4. Copie URL e chave anon para o `.env` do frontend
-5. Execute o arquivo `frontend/supabase/schema.sql` no SQL Editor
+5. Execute os arquivos da pasta `frontend/supabase/` em ordem no SQL Editor, começando por `schema.sql`
+
+### Migração do sistema de comunidades e Aur6769
+- O projeto agora inclui a base do sistema de comunidades em `frontend/supabase/community-system.sql`.
+- Esse script é idempotente: ao ser executado novamente, ele não duplica dados nem canais.
+- Ele cria a comunidade padrão `Aur6769`, os canais `#geral`, `#chat` e `#avisos`, e atualiza os posts antigos sem perder a data original.
+- O dono da comunidade usa o primeiro perfil existente do banco como fallback seguro; em produção, vale ajustar esse owner antes da execução final.
+- Para uma migração operacional real, execute primeiro `schema.sql` e depois `community-system.sql`.
 
 ### Configuração do Spotify
 1. Crie um app em [Spotify for Developers](https://developer.spotify.com/dashboard)

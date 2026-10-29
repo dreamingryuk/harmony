@@ -39,6 +39,9 @@ function AppRoutes() {
         <Route path="/" element={<Discover app={app} />} />
         <Route path="/biblioteca" element={<Library app={app} />} />
         <Route path="/comunidade" element={<Community app={app} />} />
+        <Route path="/comunidades/:slug" element={<Community app={app} />} />
+        <Route path="/comunidades/:slug/:canal" element={<Community app={app} />} />
+        <Route path="/convite/:codigo" element={<Navigate to="/comunidade" replace />} />
         <Route path="/mensagens" element={<Messages app={app} />} />
         <Route path="/notificacoes" element={<Notifications app={app} />} />
         <Route path="/retrospectiva" element={<Retrospective app={app} />} />

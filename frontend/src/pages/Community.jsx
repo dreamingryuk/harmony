@@ -14,6 +14,10 @@ const isMention = (notification) =>
 export function Community({ app }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const communitySlug = location.pathname.startsWith('/comunidades/')
+    ? (location.pathname.split('/').filter(Boolean)[1] || 'aur6769')
+    : 'aur6769'
+  const communityName = communitySlug === 'aur6769' ? 'Aur6769' : communitySlug.replace(/-/g, ' ')
   const markingNotifications = useRef(new Set())
   const [posts, setPosts] = useState([]),
     [content, setContent] = useState(''),
@@ -227,6 +231,11 @@ export function Community({ app }) {
   }
   return (
     <Page title="Comunidade" subtitle="O que está tocando na cabeça de todo mundo?">
+      {communitySlug && (
+        <div className="hint" style={{ marginBottom: 16 }}>
+          Comunidade ativa: <strong>{communityName}</strong>. Os posts antigos continuam preservados nesta comunidade padrão do Harmony.
+        </div>
+      )}
       <form className="composer" onSubmit={publish}>
         <Avatar profile={app.profile} />
         <MentionComposer
