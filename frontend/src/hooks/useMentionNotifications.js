@@ -14,7 +14,7 @@ export function useMentionNotifications(userId) {
     const { data, error: queryError } = await supabase
       .from('community_notifications')
       .select(
-        'id, post_id, comment_id, kind, created_at, actor:profiles!community_notifications_actor_id_fkey(id, username, display_name, avatar_url)'
+        'id, post_id, comment_id, kind, created_at, read_at, actor:profiles!community_notifications_actor_id_fkey(id, username, display_name, avatar_url)'
       )
       .eq('recipient_id', userId)
       .order('created_at', { ascending: false })
@@ -66,6 +66,7 @@ export function useMentionNotifications(userId) {
           item.id === notificationId ? { ...item, read_at: new Date().toISOString() } : item
         )
       )
+      window.dispatchEvent(new Event('harmony-notifications-changed'))
     },
     [userId]
   )

@@ -81,6 +81,7 @@ export function Shell({ app, children }) {
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const [accountsOpen, setAccountsOpen] = useState(false)
+  const latestUnreadNotification = (app.mentionNotifications || []).find((notification) => !notification.read_at)
   // A altura real do player reposiciona a barra inferior e o fim da página.
   const [playerHeight, setPlayerHeight] = useState(0)
   const logout = async () => {
@@ -163,17 +164,17 @@ export function Shell({ app, children }) {
         </div>
       </aside>
       <main className="content">
-        {app.mentionNotifications?.[0] && (
+        {latestUnreadNotification && (
           <aside className="mention-toast" role="status">
             <Bell size={19} />
             <p>
-              <b>{app.mentionNotifications[0].actor?.display_name || 'Alguém'}</b>{' '}
-              {toastText(app.mentionNotifications[0])}
+              <b>{latestUnreadNotification.actor?.display_name || 'Alguém'}</b>{' '}
+              {toastText(latestUnreadNotification)}
             </p>
             <button
               type="button"
               onClick={() =>
-                navigate(`/comunidade?notificacao=${encodeURIComponent(app.mentionNotifications[0].id)}`)
+                navigate(`/comunidade?notificacao=${encodeURIComponent(latestUnreadNotification.id)}`)
               }
             >
               Ver postagem
