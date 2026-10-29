@@ -5,3 +5,5 @@ dist
 
 # Estado local da Supabase CLI (link do projeto)
 supabase/.temp
+
+admin-access.mjs

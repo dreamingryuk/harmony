@@ -58,7 +58,7 @@ Ouvintes de música em geral, principalmente estudantes e jovens que desejam com
 
 - **Descoberta** - Busca de faixas no Spotify com conexão opcional à conta
 - **Biblioteca** - Músicas salvas, criação de playlists e importação de playlists do Spotify
-- **Comunidade** - Feed de publicações com curtidas em tempo real
+- **Comunidades** - Fóruns com posts, playlists, músicas e respostas; qualquer pessoa cria o seu
 - **Mensagens** - Chat privado entre usuários
 - **Retrospectiva** - Histórico de reprodução com gráficos e top músicas/artistas por período
 - **Perfil** - Personalização com nome, bio e gêneros favoritos
@@ -72,6 +72,14 @@ Ouvintes de música em geral, principalmente estudantes e jovens que desejam com
 - Criação automática de perfil ao autenticar
 - Edição de perfil (nome de exibição, bio, gêneros favoritos)
 - Modo demonstração quando o Supabase não está configurado
+
+### Comunidades (fóruns)
+- Aba **Comunidades**: lista os fóruns públicos e os seus, com botão de criar
+- Qualquer pessoa cria um fórum com ícone, banner, título, descrição e privacidade
+- Três tipos de entrada: **pública** (entra na hora), **por aprovação** (o dono aceita ou recusa pedidos) e **com senha**
+- Dentro de cada fórum funciona o feed completo: posts, playlists, músicas, menções, curtidas e respostas
+- O dono é o admin: aprova membros, remove gente e apaga posts do fórum
+- Senhas guardadas apenas como hash no banco, em tabela inacessível ao cliente
 
 ### Social
 - Publicações com texto (1-2000 caracteres)
@@ -149,12 +157,12 @@ npm run dev
 4. Copie URL e chave anon para o `.env` do frontend
 5. Execute os arquivos da pasta `frontend/supabase/` em ordem no SQL Editor, começando por `schema.sql`
 
-### Migração do sistema de comunidades e Aur6769
-- O projeto agora inclui a base do sistema de comunidades em `frontend/supabase/community-system.sql`.
-- Esse script é idempotente: ao ser executado novamente, ele não duplica dados nem canais.
-- Ele cria a comunidade padrão `Aur6769`, os canais `#geral`, `#chat` e `#avisos`, e atualiza os posts antigos sem perder a data original.
-- O dono da comunidade usa o primeiro perfil existente do banco como fallback seguro; em produção, vale ajustar esse owner antes da execução final.
-- Para uma migração operacional real, execute primeiro `schema.sql` e depois `community-system.sql`.
+### Migração do sistema de fóruns (`community-forums.sql`)
+- Rode `frontend/supabase/community-forums.sql` por último, depois de `community-system.sql` (quando houver).
+- O script é idempotente: pode ser executado de novo sem duplicar nada (tabelas com `if not exists`, policies com `drop policy if exists`, bucket com `on conflict`).
+- Ele adiciona: senha por fórum (hash), pedidos de entrada, RLS de membros, funções `criar_comunidade` / `entrar_comunidade` / `pedir_entrar_comunidade` / `sair_comunidade` / `responder_pedido`, e o bucket de imagens `comunidades`.
+- Migra os posts antigos sem fórum para a comunidade privada `Renato Lanches` e só coloca como membros quem já tinha postado; a antiga `Aur6769` é apagada.
+- Não reexecute `community-system.sql` depois desta migração: ele recriaria a `Aur6769` e reapontaria os posts antigos para ela.
 
 ### Configuração do Spotify
 1. Crie um app em [Spotify for Developers](https://developer.spotify.com/dashboard)

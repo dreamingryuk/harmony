@@ -10,6 +10,7 @@ import { SettingsErrorBoundary } from './components/SettingsErrorBoundary'
 import { Auth } from './pages/Auth'
 import { Discover } from './pages/Discover'
 import { Library } from './pages/Library'
+import { Communities } from './pages/Communities'
 import { Community } from './pages/Community'
 import { Messages } from './pages/Messages'
 import { Notifications } from './pages/Notifications'
@@ -18,6 +19,12 @@ import { Profile } from './pages/Profile'
 import { AccountSettings } from './pages/AccountSettings'
 import { ResetPassword } from './pages/ResetPassword'
 import './App.css'
+
+// Mantém a query string ao redirecionar rotas antigas (ex.: ?notificacao=...).
+function RedirectSearch({ to }) {
+  const location = useLocation()
+  return <Navigate to={{ pathname: to, search: location.search }} replace />
+}
 
 function AppRoutes() {
   const location = useLocation()
@@ -38,10 +45,11 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Discover app={app} />} />
         <Route path="/biblioteca" element={<Library app={app} />} />
-        <Route path="/comunidade" element={<Community app={app} />} />
+        <Route path="/comunidade" element={<RedirectSearch to="/comunidades" />} />
+        <Route path="/comunidades" element={<Communities app={app} />} />
         <Route path="/comunidades/:slug" element={<Community app={app} />} />
         <Route path="/comunidades/:slug/:canal" element={<Community app={app} />} />
-        <Route path="/convite/:codigo" element={<Navigate to="/comunidade" replace />} />
+        <Route path="/convite/:codigo" element={<RedirectSearch to="/comunidades" />} />
         <Route path="/mensagens" element={<Messages app={app} />} />
         <Route path="/notificacoes" element={<Notifications app={app} />} />
         <Route path="/retrospectiva" element={<Retrospective app={app} />} />

@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, ExternalLink, Home, Library as LibraryIcon, ListMusic, LogOut, MessageCircle, Music2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Users, UserRound, BarChart3, Settings } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { nextLoopMode, playNext, playPrevious, queueState, setLoop, setShuffle, trackJson } from '../utils/track'
+import { abrirPost } from '../utils/community'
 import { Avatar, CoverArt, MarqueeText } from './Media'
 import { AddToPlaylistDialog } from './PlaylistComponents'
 import { YouTubePlayer } from './YouTubePlayer'
@@ -20,7 +21,7 @@ const trackKey = (track) => track?.youtubeId || track?.spotifyId
 const nav = [
   ['/', 'Descobrir', Home, 'Descobrir'],
   ['/biblioteca', 'Biblioteca', LibraryIcon, 'Biblioteca'],
-  ['/comunidade', 'Comunidade', Users, 'Comunidade'],
+  ['/comunidades', 'Comunidades', Users, 'Comunidades'],
   ['/mensagens', 'Mensagens', MessageCircle, 'Mensagens'],
   ['/notificacoes', 'Notificações', Bell, 'Avisos'],
   ['/retrospectiva', 'Retrospectiva', BarChart3, 'Resumo'],
@@ -107,7 +108,11 @@ export function Shell({ app, children }) {
             <button
               type="button"
               onClick={() =>
-                navigate(`/comunidade?notificacao=${encodeURIComponent(app.mentionNotifications[0].id)}`)
+                abrirPost(
+                  navigate,
+                  app.mentionNotifications[0].post_id,
+                  app.mentionNotifications[0].id
+                )
               }
             >
               Ver postagem

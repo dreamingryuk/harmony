@@ -5,6 +5,7 @@ import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { ProfilePopup } from '../components/ProfilePopup'
 import { avisoDeMigracao, tabelaDeAmizadeAusente } from '../utils/friendship'
+import { abrirPost } from '../utils/community'
 
 const kinds = {
   post_like: ['curtiu sua publicação.', Heart],
@@ -139,8 +140,8 @@ export function Notifications({ app }) {
   }
 
   const openPost = (item) => {
-    // A página da comunidade marca como lida quando a publicação aparece.
-    navigate(`/comunidade?notificacao=${encodeURIComponent(item.id)}`)
+    // A página do fórum marca como lida quando a publicação aparece.
+    abrirPost(navigate, item.post_id, item.id)
   }
 
   const actorName = (item) => item.actor?.display_name || 'Alguém'
