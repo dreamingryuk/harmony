@@ -31,8 +31,8 @@ const persistModes = () => {
 const sameTrack = (left, right) => {
   if (!left || !right) return false
   if (left === right) return true
-  const leftId = left.youtubeId || left.spotifyId
-  const rightId = right.youtubeId || right.spotifyId
+  const leftId = left.youtubeId || left.mediaId
+  const rightId = right.youtubeId || right.mediaId
   return Boolean(leftId && rightId && leftId === rightId)
 }
 

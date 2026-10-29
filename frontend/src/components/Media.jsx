@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Heart, Music2, Play } from 'lucide-react'
-import { FALLBACK_COVER } from '../lib/spotify'
+import { FALLBACK_COVER } from '../lib/media'
 import { play } from '../utils/track'
 
 const initials = (name = 'S') =>
@@ -76,7 +76,7 @@ export function TrackRow({ track, saved, onToggleSave, queue }) {
           {track.artists} · {track.album}
         </span>
       </button>
-      <button className="icon" onClick={() => play(track, queue)}>
+      <button type="button" className="icon" onClick={() => play(track, queue)}>
         <Play />
       </button>
       {onToggleSave && (

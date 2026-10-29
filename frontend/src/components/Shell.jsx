@@ -14,7 +14,7 @@ const formatTime = (seconds) => {
   return `${minutes}:${String(rest).padStart(2, '0')}`
 }
 
-const trackKey = (track) => track?.youtubeId || track?.spotifyId
+const trackKey = (track) => track?.youtubeId || track?.mediaId
 
 // O último item é o rótulo curto usado na barra inferior de telas pequenas.
 const nav = [
@@ -197,8 +197,7 @@ export function Player({ app, onHeightChange }) {
     [playerError, setPlayerError] = useState(''),
     [playerApiUnavailable, setPlayerApiUnavailable] = useState(false),
     [queueNav, setQueueNav] = useState(() => queueState()),
-    [showPlaylistPicker, setShowPlaylistPicker] = useState(false),
-    [spotifyKey, setSpotifyKey] = useState(0)
+    [showPlaylistPicker, setShowPlaylistPicker] = useState(false)
   const youtubePlayer = useRef(null),
     playRequested = useRef(false),
     logged = useRef(new Set()),
@@ -256,8 +255,9 @@ export function Player({ app, onHeightChange }) {
   }, [])
 
   const logPlayback = useCallback(async (playedTrack) => {
-    if (!configured || logged.current.has(playedTrack.spotifyId)) return
-    logged.current.add(playedTrack.spotifyId)
+    const id = trackKey(playedTrack)
+    if (!configured || !id || logged.current.has(id)) return
+    logged.current.add(id)
     try {
       const { error } = await supabase.from('listening_events').insert({
         user_id: app.user.id,
@@ -340,9 +340,6 @@ export function Player({ app, onHeightChange }) {
         setProgress(0)
         setPlaying(true)
         setPlayerError('')
-      } else {
-        // O Spotify toca por iframe: recarregar é como reiniciar a faixa.
-        setSpotifyKey((key) => key + 1)
       }
     } catch (error) {
       setPlayerError(error.message || 'Não foi possível reiniciar a faixa.')
@@ -374,7 +371,7 @@ export function Player({ app, onHeightChange }) {
   const isYoutube = track.platform === 'youtube' && track.youtubeId
   const percent = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0
   return (
-    <footer className={`player ${isYoutube ? 'youtube-player' : 'spotify-player'}`} ref={footer}>
+    <footer className="player youtube-player" ref={footer}>
       <div className="player-media">
         {isYoutube && (
           <div className="player-audio">
@@ -475,22 +472,13 @@ export function Player({ app, onHeightChange }) {
           className="player-hint"
           title="Não foi possível carregar os controles do YouTube."
           aria-label="Abrir no YouTube"
-          href={track.externalUrl || track.spotifyUrl}
+          href={track.externalUrl}
           target="_blank"
           rel="noreferrer"
         >
           Abrir no YouTube
         </a>
-      ) : (
-        <iframe
-          key={spotifyKey}
-          className="spotify-embed"
-          title={`Reproduzir ${track.title} no Spotify`}
-          src={`https://open.spotify.com/embed/track/${encodeURIComponent(track.spotifyId)}?utm_source=generator&theme=0`}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-        />
-      )}
+      ) : null}
       {playerError && <span className="player-error" role="status">{playerError}</span>}
       <button
         type="button"
@@ -503,9 +491,9 @@ export function Player({ app, onHeightChange }) {
       </button>
       <a
         className="player-external"
-        title={isYoutube ? 'Abrir no YouTube' : 'Abrir no Spotify'}
-        aria-label={isYoutube ? 'Abrir no YouTube' : 'Abrir no Spotify'}
-        href={track.externalUrl || track.spotifyUrl}
+        title="Abrir no YouTube"
+        aria-label="Abrir no YouTube"
+        href={track.externalUrl}
         target="_blank"
         rel="noreferrer"
       >

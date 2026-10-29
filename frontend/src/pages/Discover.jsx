@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Music2, RefreshCw, Search, Sparkles, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
-import { connectSpotify, searchTracks, spotifyArtists, spotifyGenreArtists, spotifyPopularSongs } from '../lib/spotify'
 import { searchYoutubeTracks, youtubeApiKey, youtubePopularTracks, youtubeArtists } from '../lib/youtube'
 import { useMusicConnections } from '../hooks/useMusicConnections'
 import { CoverArt, Page, Section, TrackRow } from '../components/Media'
@@ -10,30 +9,7 @@ import { PlaylistCard, PlaylistDialog } from '../components/PlaylistComponents'
 import { playPlaylist } from '../utils/playlist'
 import { fromJson } from '../utils/track'
 
-const featured = [
-  {
-    spotifyId: '4uLU6hMCjMI75M1A2tKUQC',
-    uri: 'spotify:track:4uLU6hMCjMI75M1A2tKUQC',
-    title: 'Never Gonna Give You Up',
-    artists: 'Rick Astley',
-    album: 'Whenever You Need Somebody',
-    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02255e131abc1410833be95673',
-    previewUrl: '',
-    spotifyUrl: 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC',
-    genres: ['Pop'],
-  },
-  {
-    spotifyId: '0VjIjW4GlUZAMYd2vXMi3b',
-    uri: 'spotify:track:0VjIjW4GlUZAMYd2vXMi3b',
-    title: 'Blinding Lights',
-    artists: 'The Weeknd',
-    album: 'After Hours',
-    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e028863bc11d2aa12b54f5aeb36',
-    previewUrl: '',
-    spotifyUrl: 'https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b',
-    genres: ['Pop'],
-  },
-]
+const featured = []
 
 // Usada enquanto nenhuma plataforma está conectada.
 const curatedArtists = [
@@ -47,14 +23,13 @@ const curatedArtists = [
   { id: 'artist-anitta', name: 'Anitta', genre: 'Pop brasileiro' },
 ]
 
-const platformName = (platform) => (platform === 'youtube' ? 'YouTube' : platform === 'spotify' ? 'Spotify' : 'Harmony')
+const platformName = (platform) => (platform === 'youtube' ? 'YouTube' : 'Harmony')
 
 export function Discover({ app }) {
   const [query, setQuery] = useState(''),
     [results, setResults] = useState([]),
     [busy, setBusy] = useState(false),
-    [activePlatform, setActivePlatform] = useState('spotify'),
-    [showPlatformOptions, setShowPlatformOptions] = useState(false),
+    [activePlatform, setActivePlatform] = useState('youtube'),
     [trendPlatform, setTrendPlatform] = useState('curated'),
     [trending, setTrending] = useState(featured),
     [trendingBusy, setTrendingBusy] = useState(false),
@@ -66,9 +41,7 @@ export function Discover({ app }) {
     [sugestoes, setSugestoes] = useState({ meus: [], novos: [], tocadas: [], carregando: true, aviso: '' })
   const sugestaoKey = useRef('')
   const { connections, connectYoutube } = useMusicConnections(app.user.id)
-  const connectedPlatforms = Object.entries(connections)
-    .filter(([, connected]) => connected)
-    .map(([platform]) => platform)
+  const connectedPlatforms = connections.youtube ? ['youtube'] : []
 
   useEffect(() => {
     if (!connections[activePlatform] && connectedPlatforms.length) {
@@ -84,16 +57,6 @@ export function Discover({ app }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections])
 
-  const loadArtists = async (tracks) => {
-    try {
-      const ids = [...new Set(tracks.flatMap((track) => track.artistIds || []))]
-      const list = await spotifyArtists(ids)
-      return list.length ? list : curatedArtists
-    } catch {
-      return curatedArtists
-    }
-  }
-
   // No YouTube as fotos vêm dos canais dos vídeos (uma chamada para todos).
   const loadYoutubeArtistList = async (tracks) => {
     try {
@@ -104,19 +67,14 @@ export function Discover({ app }) {
     }
   }
 
-  // Em alta no Spotify/YouTube (ou no conteúdo curado quando nada está conectado).
+  // Em alta no YouTube (ou conteúdo local enquanto a integração não está ativa).
   useEffect(() => {
     let active = true
     const load = async () => {
       setTrendingBusy(true)
       setTrendingError('')
       try {
-        if (trendPlatform === 'spotify') {
-          const tracks = await spotifyPopularSongs(12)
-          if (!active) return
-          setTrending(tracks)
-          setArtists(await loadArtists(tracks))
-        } else if (trendPlatform === 'youtube') {
+        if (trendPlatform === 'youtube') {
           const tracks = await youtubePopularTracks(12)
           if (!active) return
           setTrending(tracks)
@@ -164,22 +122,6 @@ export function Discover({ app }) {
 
     const descobrirNovos = async (termo) => {
       if (!termo || !plataforma) return []
-      if (plataforma === 'spotify') {
-        const faixas = await searchTracks(termo)
-        const principal = faixas[0]?.artistIds?.[0]
-        const detalhes = principal ? await spotifyArtists([principal]) : []
-        const genero = detalhes[0]?.genres?.[0]
-        if (genero) {
-          try {
-            const parecidos = await spotifyGenreArtists(genero)
-            if (parecidos.length) return parecidos
-          } catch {
-            // Filtro de gênero indisponível: cai para os artistas das buscas.
-          }
-        }
-        const ids = [...new Set(faixas.flatMap((faixa) => faixa.artistIds || []))]
-        return spotifyArtists(ids)
-      }
       return youtubeArtists(await searchYoutubeTracks(termo, { limit: 12 }), 8)
     }
 
@@ -215,7 +157,7 @@ export function Discover({ app }) {
             if (!atual.genre && evento.genres?.length) atual.genre = evento.genres[0]
             artistas.set(nome, atual)
           }
-          const chaveFaixa = evento.track?.spotify_id || evento.track?.title
+          const chaveFaixa = evento.track?.media_id || evento.track?.youtube_id || evento.track?.spotify_id || evento.track?.title
           if (chaveFaixa) {
             const atual = faixas.get(chaveFaixa) || { track: evento.track, count: 0 }
             atual.count += 1
@@ -266,15 +208,10 @@ export function Discover({ app }) {
     load()
   }, [app.user.id, activePlatform, connections])
 
-  const connectPlatform = async (platform) => {
+  const connectPlatform = async () => {
     try {
-      if (platform === 'spotify') {
-        await connectSpotify()
-      } else {
-        connectYoutube()
-        setActivePlatform('youtube')
-      }
-      setShowPlatformOptions(false)
+      connectYoutube()
+      setActivePlatform('youtube')
     } catch (error) {
       alert(error.message)
     }
@@ -284,11 +221,7 @@ export function Discover({ app }) {
     if (!clean) return
     try {
       setBusy(true)
-      setResults(
-        activePlatform === 'youtube'
-          ? await searchYoutubeTracks(clean)
-          : await searchTracks(clean)
-      )
+      setResults(await searchYoutubeTracks(clean))
     } catch (error) {
       alert(error.message)
     } finally {
@@ -325,57 +258,21 @@ export function Discover({ app }) {
               </span>
               <h2>O próximo som que vai virar seu favorito.</h2>
               <p>
-                Conecte uma plataforma de música, importe playlists do Spotify e encontre gente
+                Ative a música do YouTube e encontre gente
                 que vibra na mesma frequência.
               </p>
             </>
           )}
           {!connectedPlatforms.length ? (
             <div className="music-connect">
-              <button className="primary" onClick={() => setShowPlatformOptions((open) => !open)}>
-                Conectar com plataforma de música
+              <button className="primary" onClick={() => connectPlatform('youtube')} disabled={!youtubeApiKey()}>
+                Ativar YouTube Music
               </button>
-              {showPlatformOptions && (
-                <div className="music-connect-options">
-                  <button className="secondary" onClick={() => connectPlatform('spotify')}>
-                    Conectar Spotify
-                  </button>
-                  <button
-                    className="secondary"
-                    onClick={() => connectPlatform('youtube')}
-                    disabled={!youtubeApiKey()}
-                    title={!youtubeApiKey() ? 'O site ainda precisa configurar a chave da API do YouTube.' : undefined}
-                  >
-                    Ativar YouTube Music
-                  </button>
-                  {!youtubeApiKey() && (
-                    <p className="hint">O YouTube Music ainda não foi configurado neste site.</p>
-                  )}
-                </div>
-              )}
+              {!youtubeApiKey() && <p className="hint">O YouTube Music ainda não foi configurado neste site.</p>}
             </div>
           ) : (
             <div className="music-platforms">
-              {connectedPlatforms.length > 1 ? (
-                connectedPlatforms.map((platform) => (
-                  <button
-                    type="button"
-                    className={activePlatform === platform ? 'active' : ''}
-                    key={platform}
-                    onClick={() => {
-                      setActivePlatform(platform)
-                      setResults([])
-                    }}
-                  >
-                    {platform === 'youtube' ? 'YouTube Music' : 'Spotify'}
-                  </button>
-                ))
-              ) : (
-                <span>
-                  Conectado a {activePlatform === 'youtube' ? 'YouTube Music' : 'Spotify'} ·{' '}
-                  <Link to="/configuracoes">Gerenciar plataformas</Link>
-                </span>
-              )}
+              <span>Conectado ao YouTube Music · <Link to="/configuracoes">Gerenciar plataforma</Link></span>
             </div>
           )}
         </div>
@@ -387,9 +284,7 @@ export function Discover({ app }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={
-            activePlatform === 'youtube'
-              ? 'Busque músicas e vídeos no YouTube...'
-              : 'Busque uma faixa, álbum ou artista...'
+            'Busque músicas e vídeos no YouTube...'
           }
           disabled={!connections[activePlatform]}
         />
@@ -400,13 +295,13 @@ export function Discover({ app }) {
       {results.length ? (
         <Section title="Resultados da busca">
           <div className="section-head">
-            <p className="hint">{results.length} faixas encontradas em {platformName(activePlatform)}.</p>
+            <p className="hint">{results.length} faixas encontradas no YouTube.</p>
             <button type="button" className="secondary small-button" onClick={() => { setResults([]); setQuery('') }}>
               <X /> Limpar busca
             </button>
           </div>
           {results.map((track) => (
-            <TrackRow key={track.spotifyId} track={track} queue={results} />
+            <TrackRow key={track.mediaId || track.youtubeId} track={track} queue={results} />
           ))}
         </Section>
       ) : (
@@ -441,11 +336,11 @@ export function Discover({ app }) {
             {trendingBusy ? (
               <p className="hint">Buscando as faixas mais tocadas...</p>
             ) : (
-              trending.map((track) => <TrackRow key={track.spotifyId} track={track} queue={trending} />)
+              trending.map((track) => <TrackRow key={track.mediaId || track.youtubeId} track={track} queue={trending} />)
             )}
             {trendPlatform === 'curated' && !trendingError && (
               <p className="hint">
-                Conecte o Spotify ou o YouTube na busca acima para ver as paradas atualizadas.
+                Ative o YouTube Music na busca acima para ver as paradas atualizadas.
               </p>
             )}
           </section>
@@ -466,7 +361,7 @@ export function Discover({ app }) {
                     </div>
                     {sugestoes.tocadas.map((track) => (
                       <TrackRow
-                        key={track.spotifyId || track.title}
+                        key={track.mediaId || track.youtubeId || track.title}
                         track={track}
                         queue={sugestoes.tocadas}
                       />
@@ -488,7 +383,7 @@ export function Discover({ app }) {
                     <div className="section-head section-subhead">
                       <h3>Artistas novos para você</h3>
                       {!connections[activePlatform] && (
-                        <p className="hint">Conecte o Spotify ou o YouTube para descobrir mais gente.</p>
+                        <p className="hint">Ative o YouTube Music para descobrir mais gente.</p>
                       )}
                     </div>
                     <div className="artist-grid">
@@ -536,22 +431,9 @@ export function Discover({ app }) {
 
           <section className="section">
             <div className="section-head">
-              <h2>Playlists do Spotify para você</h2>
+              <h2>Playlists do Harmony em alta</h2>
             </div>
-            <div className="embed-grid">
-              <iframe
-                title="Today’s Top Hits"
-                src="https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M?utm_source=generator"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-              />
-              <iframe
-                title="RapCaviar"
-                src="https://open.spotify.com/embed/playlist/37i9dQZF1DX0XUsuxWHRQd?utm_source=generator"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-              />
-            </div>
+            <p className="hint">Crie ou publique playlists na sua Biblioteca para vê-las aqui.</p>
           </section>
         </>
       )}
