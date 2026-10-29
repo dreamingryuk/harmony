@@ -72,7 +72,7 @@ create table if not exists public.mensagens_canal (
 create index if not exists comunidades_slug_idx on public.comunidades(slug);
 create index if not exists comunidade_membros_usuario_idx on public.comunidade_membros(usuario_id);
 create index if not exists canais_comunidade_ordem_idx on public.canais(comunidade_id, ordem);
-create index if not exists posts_comunidade_canal_idx on public.posts(comunidade_id, canal_id, criada_em desc);
+create index if not exists posts_comunidade_canal_idx on public.posts(comunidade_id, canal_id, created_at desc);
 create index if not exists mensagens_canal_idx on public.mensagens_canal(canal_id, criada_em desc);
 
 alter table public.posts enable row level security;
@@ -100,13 +100,13 @@ create policy "comunidades do proprio usuario" on public.comunidades
 drop policy if exists "membros visiveis da comunidade" on public.comunidade_membros;
 create policy "membros visiveis da comunidade" on public.comunidade_membros
   for select to authenticated
-  using (exists (
-    select 1 from public.comunidade_membros cm
-    where cm.comunidade_id = comunidade_membros.comunidade_id and cm.usuario_id = auth.uid()
-  ) or exists (
-    select 1 from public.comunidades c
-    where c.id = comunidade_membros.comunidade_id and c.visibilidade = 'publica'
-  ));
+  using (
+    usuario_id = auth.uid()
+    or exists (
+      select 1 from public.comunidades c
+      where c.id = comunidade_membros.comunidade_id and c.visibilidade = 'publica'
+    )
+  );
 
 drop policy if exists "membros gerenciam sua propria participacao" on public.comunidade_membros;
 create policy "membros gerenciam sua propria participacao" on public.comunidade_membros
