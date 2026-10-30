@@ -75,15 +75,16 @@ Ouvintes de música em geral, principalmente estudantes e jovens que desejam com
 
 ### Comunidades (fóruns)
 - Aba **Comunidades**: lista os fóruns públicos e os seus, com botão de criar
-- Qualquer pessoa cria um fórum com ícone, banner, título, descrição e privacidade
-- Três tipos de entrada: **pública** (entra na hora), **por aprovação** (o dono aceita ou recusa pedidos) e **com senha**
+- Qualquer pessoa cria um fórum com foto, banner, título, descrição e privacidade
+- Três tipos de entrada: **público** (entra na hora), **público com verificação** (o dono aceita ou recusa a solicitação) e **privado** (é preciso colocar a senha)
 - Dentro de cada fórum funciona o feed completo: posts, playlists, músicas, menções, curtidas e respostas
-- O dono é o admin: aprova membros, remove gente e apaga posts do fórum
+- O dono edita as informações do fórum (título, descrição, foto, banner, privacidade e senha), aprova membros, remove gente e apaga posts
 - Senhas guardadas apenas como hash no banco, em tabela inacessível ao cliente
 
 ### Social
 - Publicações com texto (1-2000 caracteres)
 - Curtir e descurtir publicações
+- Notificações de curtidas, respostas e menções: a aba **Notificações** guarda o histórico das últimas 20 recebidas, mostra a comunidade de origem e marca como lida a notificação que você abrir
 - Sistema de seguidores (estrutura implementada no banco)
 - Feed em tempo real
 - Mensagens privadas entre usuários em tempo real
@@ -163,6 +164,11 @@ npm run dev
 - Ele adiciona: senha por fórum (hash), pedidos de entrada, RLS de membros, funções `criar_comunidade` / `entrar_comunidade` / `pedir_entrar_comunidade` / `sair_comunidade` / `responder_pedido`, e o bucket de imagens `comunidades`.
 - Migra os posts antigos sem fórum para a comunidade privada `Renato Lanches` e só coloca como membros quem já tinha postado; a antiga `Aur6769` é apagada.
 - Não reexecute `community-system.sql` depois desta migração: ele recriaria a `Aur6769` e reapontaria os posts antigos para ela.
+
+### Migração das funções do dono (`community-owner.sql`)
+- Rode `frontend/supabase/community-owner.sql` depois de `community-forums.sql`.
+- Cria `atualizar_comunidade` (título, descrição, foto, banner, privacidade e senha), `remover_membro_comunidade` e `apagar_post_comunidade`, usadas pelo botão **Configurar** da aba Comunidade.
+- Também é idempotente: pode ser executado de novo com segurança.
 
 ### Configuração do Spotify
 1. Crie um app em [Spotify for Developers](https://developer.spotify.com/dashboard)

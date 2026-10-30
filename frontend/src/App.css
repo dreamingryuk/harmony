@@ -1215,6 +1215,7 @@ button {
 .mention { color: var(--accent); font-weight: 700; }
 .mention-toast { position: fixed; z-index: 12; top: 16px; right: 18px; display: flex; align-items: center; gap: 12px; width: min(360px, calc(100vw - 36px)); padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elevated); box-shadow: 0 12px 32px var(--shadow); color: var(--text); }
 .mention-toast p { flex: 1; margin: 0; font-size: 13px; line-height: 1.4; }
+.mention-toast p small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .mention-toast button { flex: 0 0 auto; border: 0; border-radius: 8px; padding: 8px 10px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .mention-notifications { display: grid; gap: 8px; }
 .mention-notification { display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px; background: #f5fff8; color: var(--ink); text-align: left; }
@@ -1224,6 +1225,7 @@ button {
 .post-actions .like { padding: 5px 0; }
 .post-actions .disliked { color: #b23a56; }
 .post-actions .disliked svg { fill: #fbe3e9; }
+.post-actions .post-delete { color: var(--danger); }
 .post-replies { margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--line); }
 .post-reply { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; }
 .post-reply > div { min-width: 0; }
@@ -2189,8 +2191,17 @@ input[type='checkbox']:disabled {
 .notification-open.liked { background: #fff5f7; border-color: #ffd9e0; }
 .notification-open > span { display: grid; gap: 3px; flex: 1; min-width: 0; }
 .notification-open small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.notification-open small.notification-community { color: var(--accent); font-weight: 700; }
 .notification-open svg { width: 17px; flex: 0 0 auto; color: var(--green); }
 .notification-open.liked svg { color: #e5484d; }
+/* Já vistas perdem o destaque para o aviso novo aparecer à primeira vista. */
+.notification-item.read .notification-open {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+  opacity: .75;
+}
+.notification-item.read .notification-open svg { color: var(--muted); }
 
 @media (max-width: 880px) {
   .profile-identity { padding: 0 20px; }
@@ -2668,8 +2679,11 @@ html[data-mode='dark'] input[type='checkbox'] {
   gap: 14px;
   align-items: start;
 }
-.community-media-field { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
+.community-media-field { display: grid; gap: 7px; min-width: 0; font-size: 13px; font-weight: 700; }
 .community-media-field input[type='file'] {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   border: 1px dashed var(--line);
   border-radius: 9px;
   padding: 8px;
@@ -2691,7 +2705,8 @@ html[data-mode='dark'] input[type='checkbox'] {
 }
 .privacy-options { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .privacy-options legend { margin-bottom: 7px; padding: 0; font-size: 13px; font-weight: 700; }
-.privacy-option {
+/* Mais específico que `.editor-fields label`, senão o rádio vira uma linha própria. */
+.editor-fields .privacy-option {
   display: flex;
   align-items: flex-start;
   gap: 9px;

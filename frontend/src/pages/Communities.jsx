@@ -3,15 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, Check, Plus, Users, X } from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
+import { CommunityEditorDialog } from '../components/CommunityEditor'
 import { ProfilePopup } from '../components/ProfilePopup'
-import {
-  abrirPost,
-  enviarImagemComunidade,
-  erroDeComunidade,
-  imagemValida,
-  mensagemDeEntrada,
-  PRIVACIDADES,
-} from '../utils/community'
+import { abrirPost, erroDeComunidade, mensagemDeEntrada, PRIVACIDADES } from '../utils/community'
 
 const isMention = (notification) =>
   notification.kind === 'post_mention' || notification.kind === 'comment_mention'
@@ -197,207 +191,6 @@ function PasswordDialog({ community, onClose, onSuccess }) {
   )
 }
 
-function CreateCommunityDialog({ app, onClose, onCreated }) {
-  const [nome, setNome] = useState('')
-  const [descricao, setDescricao] = useState('')
-  const [visibilidade, setVisibilidade] = useState('publica')
-  const [senha, setSenha] = useState('')
-  const [icone, setIcone] = useState(null)
-  const [banner, setBanner] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
-
-  const escolherImagem = (campo) => (event) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    if (!imagemValida(file)) {
-      return setFormError('Formato inválido. Escolha uma imagem JPEG, PNG ou WebP de até 5 MB.')
-    }
-    setFormError('')
-    setCampo(campo, { file, url: URL.createObjectURL(file) })
-  }
-
-  const setCampo = (campo, valor) => {
-    if (campo === 'icone') {
-      setIcone((atual) => {
-        if (atual?.url) URL.revokeObjectURL(atual.url)
-        return valor
-      })
-    } else {
-      setBanner((atual) => {
-        if (atual?.url) URL.revokeObjectURL(atual.url)
-        return valor
-      })
-    }
-  }
-
-  const criar = async (event) => {
-    event.preventDefault()
-    setFormError('')
-    if (nome.trim().length < 3) return setFormError('O título precisa ter pelo menos 3 caracteres.')
-    if (visibilidade === 'privada' && senha.length < 4) {
-      return setFormError('A senha precisa ter pelo menos 4 caracteres.')
-    }
-    setSaving(true)
-    try {
-      let iconeUrl = ''
-      let bannerUrl = ''
-      if (icone?.file)
-        iconeUrl = await enviarImagemComunidade('comunidades', app.user.id, icone.file)
-      if (banner?.file)
-        bannerUrl = await enviarImagemComunidade('comunidades', app.user.id, banner.file)
-      const { data, error } = await supabase.rpc('criar_comunidade', {
-        p_nome: nome.trim(),
-        p_descricao: descricao.trim(),
-        p_icone_url: iconeUrl,
-        p_banner_url: bannerUrl,
-        p_visibilidade: visibilidade,
-        p_senha: visibilidade === 'privada' ? senha : null,
-      })
-      if (error) throw error
-      onCreated(data)
-    } catch (error) {
-      setFormError(erroDeComunidade(error, 'Não foi possível criar a comunidade'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div
-        className="modal community-editor"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Criar comunidade"
-      >
-        <header>
-          <div>
-            <span className="eyebrow">
-              <Users /> Novo fórum
-            </span>
-            <h2>Criar comunidade</h2>
-          </div>
-          <button type="button" className="icon" onClick={onClose} aria-label="Fechar">
-            <X />
-          </button>
-        </header>
-        <form onSubmit={criar}>
-          <div className="editor-fields">
-            <div className="community-media-fields">
-              <label className="community-media-field">
-                <span>Ícone</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={escolherImagem('icone')}
-                />
-                <span className="community-media-preview community-icon big">
-                  {icone ? (
-                    <img src={icone.url} alt="Prévia do ícone" />
-                  ) : (
-                    nome
-                      .trim()
-                      .split(' ')
-                      .map((parte) => parte[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase() || '?'
-                  )}
-                </span>
-              </label>
-              <label className="community-media-field">
-                <span>Banner</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={escolherImagem('banner')}
-                />
-                <span
-                  className="community-media-preview community-banner-preview"
-                  style={banner ? { backgroundImage: `url(${banner.url})` } : undefined}
-                />
-              </label>
-            </div>
-            <label>
-              Título
-              <input
-                value={nome}
-                onChange={(event) => setNome(event.target.value)}
-                maxLength={32}
-                required
-                placeholder="Ex.: Fãs de rock"
-              />
-            </label>
-            <label>
-              Descrição
-              <textarea
-                value={descricao}
-                onChange={(event) => setDescricao(event.target.value)}
-                maxLength={300}
-                rows={3}
-                placeholder="Do que trata este fórum?"
-              />
-            </label>
-            <fieldset className="privacy-options">
-              <legend>Quem pode entrar</legend>
-              {Object.entries(PRIVACIDADES).map(([valor, info]) => (
-                <label
-                  key={valor}
-                  className={`privacy-option ${visibilidade === valor ? 'active' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="visibilidade"
-                    value={valor}
-                    checked={visibilidade === valor}
-                    onChange={() => setVisibilidade(valor)}
-                  />
-                  <info.icone size={17} />
-                  <span>
-                    <b>{info.rotulo}</b>
-                    <small>{info.resumo}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            {visibilidade === 'privada' && (
-              <label>
-                Senha da comunidade
-                <input
-                  type="password"
-                  value={senha}
-                  onChange={(event) => setSenha(event.target.value)}
-                  minLength={4}
-                  required
-                  placeholder="Quem souber a senha entra"
-                />
-              </label>
-            )}
-          </div>
-          {formError && (
-            <p className="form-error" role="alert">
-              {formError}
-            </p>
-          )}
-          <div className="modal-actions">
-            <button type="button" className="secondary" onClick={onClose}>
-              Cancelar
-            </button>
-            <button type="submit" className="primary" disabled={saving}>
-              {saving ? 'Criando...' : 'Criar comunidade'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 export function Communities({ app }) {
   const navigate = useNavigate()
   const [comunidades, setComunidades] = useState([])
@@ -570,27 +363,32 @@ export function Communities({ app }) {
           {error}
         </p>
       )}
-      {app.mentionNotifications?.filter(isMention).length > 0 && (
+      {app.mentionNotifications?.filter(isMention).some((item) => !item.read_at) && (
         <Section title="Menções">
           <div className="mention-notifications">
-            {app.mentionNotifications.filter(isMention).map((notification) => (
-              <button
-                className="mention-notification"
-                key={notification.id}
-                type="button"
-                onClick={() => abrirPost(navigate, notification.post_id, notification.id)}
-              >
-                <Bell size={18} />
-                <span>
-                  <b>{notification.actor?.display_name || 'Alguém'}</b>
-                  <small>
-                    {notification.kind === 'comment_mention'
-                      ? 'mencionou você em uma resposta'
-                      : 'mencionou você em uma publicação'}
-                  </small>
-                </span>
-              </button>
-            ))}
+            {app.mentionNotifications
+              .filter((notification) => isMention(notification) && !notification.read_at)
+              .map((notification) => (
+                <button
+                  className="mention-notification"
+                  key={notification.id}
+                  type="button"
+                  onClick={() => abrirPost(navigate, notification.post_id, notification.id)}
+                >
+                  <Bell size={18} />
+                  <span>
+                    <b>{notification.actor?.display_name || 'Alguém'}</b>
+                    <small>
+                      {notification.kind === 'comment_mention'
+                        ? 'mencionou você em uma resposta'
+                        : 'mencionou você em uma publicação'}
+                      {notification.post?.comunidade?.nome && (
+                        <> na comunidade {notification.post.comunidade.nome}</>
+                      )}
+                    </small>
+                  </span>
+                </button>
+              ))}
           </div>
         </Section>
       )}
@@ -639,10 +437,10 @@ export function Communities({ app }) {
         </Section>
       )}
       {criando && (
-        <CreateCommunityDialog
+        <CommunityEditorDialog
           app={app}
           onClose={() => setCriando(false)}
-          onCreated={(slug) => {
+          onSaved={(slug) => {
             setCriando(false)
             navigate(`/comunidades/${slug}`)
           }}

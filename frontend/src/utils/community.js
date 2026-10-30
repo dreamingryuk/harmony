@@ -10,21 +10,21 @@ export const tabelaDeComunidadeAusente = (error) =>
 export const avisoDeMigracaoComunidades =
   'Rode o arquivo supabase/community-forums.sql no SQL Editor do Supabase para liberar os fóruns de comunidade.'
 
-// Os três tipos de entrada aceitos na criação de uma comunidade.
+// Os três tipos de entrada aceitos na criação e na edição de uma comunidade.
 export const PRIVACIDADES = {
   publica: {
-    rotulo: 'Aberta',
-    resumo: 'Qualquer um entra e sai livremente.',
+    rotulo: 'Público',
+    resumo: 'Todos podem entrar, sem aprovação nem senha.',
     icone: Globe,
   },
   por_convite: {
-    rotulo: 'Com aprovação',
-    resumo: 'Quem quiser entrar pede e o admin aceita ou recusa.',
+    rotulo: 'Público com verificação',
+    resumo: 'Entra quem enviar a solicitação e o dono permitir.',
     icone: UserCheck,
   },
   privada: {
-    rotulo: 'Com senha',
-    resumo: 'Só entra quem souber a senha da comunidade.',
+    rotulo: 'Privado',
+    resumo: 'É preciso colocar a senha para entrar.',
     icone: Lock,
   },
 }
@@ -79,27 +79,44 @@ export const imagemValida = (file) =>
   file.size <= 5 * 1024 * 1024
 
 // Mensagem amigável quando a migração ainda não rodou.
-export const erroDeComunidade = (error, fallback) =>
-  tabelaDeComunidadeAusente(error)
-    ? avisoDeMigracaoComunidades
-    : `${fallback}: ${error?.message || error}`
+export const erroDeComunidade = (error, fallback) => {
+  if (tabelaDeComunidadeAusente(error)) return avisoDeMigracaoComunidades
+  // Função RPC ausente: as migrações de fórum e de dono ainda não foram aplicadas.
+  if (error?.code === 'PGRST202' || /Could not find the function/i.test(error?.message || '')) {
+    return (
+      'Rode os arquivos supabase/community-forums.sql e supabase/community-owner.sql ' +
+      'no SQL Editor do Supabase para liberar as funções das comunidades.'
+    )
+  }
+  return `${fallback}: ${error?.message || error}`
+}
 
 // O que cada resposta das funções de entrada significa para a pessoa.
 const MENSAGENS_ENTRADA = {
   ok: 'Você entrou na comunidade.',
   pendente: 'Pedido enviado. O admin vai responder em breve.',
   ja_membro: 'Você já é membro desta comunidade.',
-  aprovacao: 'Esta comunidade só entra quem o admin aprovar.',
+  aprovacao: 'Esta comunidade só entra quem o dono aprovar.',
   senha_invalida: 'Senha incorreta.',
   senha: 'Esta comunidade exige a senha para entrar.',
   nao_encontrada: 'Esta comunidade não existe mais.',
   nao_autenticado: 'Entre com a sua conta para participar.',
-  nao_autorizado: 'Só o admin da comunidade pode fazer isso.',
+  nao_autorizado: 'Só o dono da comunidade pode fazer isso.',
   nao_membro: 'Você não é membro desta comunidade.',
-  dono: 'O admin não pode sair da própria comunidade.',
+  dono: 'O dono não pode sair da própria comunidade.',
   banido: 'Você não pode entrar nesta comunidade.',
   sem_pedido: 'Não há pedido pendente para esta pessoa.',
   sem_comunidade: 'A migração das comunidades ainda não foi aplicada.',
+  nome_invalido: 'O título precisa ter entre 3 e 32 caracteres.',
+  descricao_invalida: 'A descrição pode ter no máximo 300 caracteres.',
+  privacidade_invalida: 'Escolha uma privacidade válida.',
+  nome_ocupado: 'Já existe uma comunidade com este título. Escolha outro.',
+  senha_obrigatoria: 'Informe uma senha para deixar a comunidade privada.',
+  senha_curta: 'A senha precisa ter pelo menos 4 caracteres.',
+  proprio_dono: 'O dono não pode ser removido da própria comunidade.',
+  sem_membro: 'Esta pessoa não faz parte da comunidade.',
+  sem_post: 'Esta publicação não existe mais.',
+  post_fora: 'Esta publicação não faz parte desta comunidade.',
 }
 
 export const mensagemDeEntrada = (codigo) =>

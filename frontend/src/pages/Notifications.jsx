@@ -34,7 +34,6 @@ export function Notifications({ app }) {
   const notifications = app.mentionNotifications || []
   const [invites, setInvites] = useState([])
   const [senders, setSenders] = useState({})
-  const [posts, setPosts] = useState({})
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [popup, setPopup] = useState(null)
@@ -68,24 +67,8 @@ export function Notifications({ app }) {
     loadInvites()
   }, [loadInvites])
 
-  // O texto de cada postagem deixa a notificação legível: quem curtiu o quê.
-  useEffect(() => {
-    if (!configured || !notifications.length) return undefined
-    const ids = [...new Set(notifications.map((item) => item.post_id).filter(Boolean))]
-    if (!ids.length) return undefined
-    let active = true
-    supabase
-      .from('posts')
-      .select('id, content, track, created_at')
-      .in('id', ids)
-      .then(({ data }) => {
-        if (!active || !data) return
-        setPosts(Object.fromEntries(data.map((post) => [post.id, post])))
-      })
-    return () => {
-      active = false
-    }
-  }, [notifications])
+  // O texto de cada postagem e a comunidade de origem vêm junto com a
+  // notificação (post -> comunidade), então não há consulta extra aqui.
 
   const respondInvite = async (invite, accept) => {
     setBusy(invite.id)
@@ -123,9 +106,7 @@ export function Notifications({ app }) {
     setBusy('all')
     setError('')
     try {
-      for (const item of notifications) {
-        await app.markMentionAsRead(item.id)
-      }
+      await app.markAllMentionsAsRead()
     } catch (err) {
       setError(`Não foi possível marcar tudo como lido: ${err.message}`)
     } finally {
@@ -139,8 +120,16 @@ export function Notifications({ app }) {
     window.dispatchEvent(new Event('harmony-notifications-changed'))
   }
 
-  const openPost = (item) => {
-    // A página do fórum marca como lida quando a publicação aparece.
+  const openPost = async (item) => {
+    // Abrir a notificação já conta como lida: a página do fórum também marca
+    // quando a publicação aparece, mas nem sempre o post chega a ficar visível.
+    if (!item.read_at) {
+      try {
+        await app.markMentionAsRead(item.id)
+      } catch (markError) {
+        setError(markError.message)
+      }
+    }
     abrirPost(navigate, item.post_id, item.id)
   }
 
@@ -149,7 +138,7 @@ export function Notifications({ app }) {
   return (
     <Page
       title="Notificações"
-      subtitle="Curtidas, respostas e convites de amizade em um só lugar."
+      subtitle="Convites de amizade e o histórico das últimas 20 notificações recebidas."
     >
       {error && (
         <p className="form-error" role="alert">
@@ -208,7 +197,7 @@ export function Notifications({ app }) {
           <button
             type="button"
             className="secondary small-button"
-            disabled={busy === 'all' || !notifications.length}
+            disabled={busy === 'all' || !notifications.some((item) => !item.read_at)}
             onClick={markAllAsRead}
           >
             {busy === 'all' ? 'Marcando...' : 'Marcar tudo como lido'}
@@ -218,7 +207,7 @@ export function Notifications({ app }) {
           <ul className="notification-list">
             {notifications.map((item) => {
               const [text, Icon] = kinds[item.kind] || kinds.post_mention
-              const post = posts[item.post_id]
+              const comunidade = item.post?.comunidade
               return (
                 <li key={item.id} className={`notification-item ${item.read_at ? 'read' : 'unread'}`}>
                   <button
@@ -236,7 +225,12 @@ export function Notifications({ app }) {
                   >
                     <span>
                       <b>{actorName(item)}</b> {text}
-                      <small>{snippet(post)}</small>
+                      <small>{snippet(item.post)}</small>
+                      {item.post && (
+                        <small className="notification-community">
+                          {comunidade ? `Na comunidade ${comunidade.nome}` : 'No Harmony'}
+                        </small>
+                      )}
                       <time dateTime={item.created_at}>{relativeTime(item.created_at)}</time>
                     </span>
                     <Icon />

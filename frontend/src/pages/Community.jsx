@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Check, Heart, LogOut, MessageCircle, Send, Shield, ThumbsDown, Users } from 'lucide-react'
+import {
+  Check,
+  Heart,
+  LogOut,
+  MessageCircle,
+  Send,
+  Settings,
+  Shield,
+  ThumbsDown,
+  Trash2,
+  Users,
+} from 'lucide-react'
 import { configured, supabase } from '../lib/supabase'
 import { Avatar, Empty, Page, Section } from '../components/Media'
 import { AttachmentCard, PlaylistDialog, SharePicker } from '../components/PlaylistComponents'
+import { CommunityEditorDialog } from '../components/CommunityEditor'
 import { loadPlaylist } from '../utils/playlist'
 import { MentionComposer, MentionText } from '../components/MentionComposer'
 import { ProfilePopup } from '../components/ProfilePopup'
@@ -11,6 +23,14 @@ import { erroDeComunidade, mensagemDeEntrada, PRIVACIDADES } from '../utils/comm
 
 const POST_QUERY =
   '*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), post_likes(user_id), post_dislikes(user_id), post_comments(id, author_id, content, created_at, author:profiles!post_comments_author_id_fkey(id, username, display_name, avatar_url))'
+
+// Como o papel de cada membro aparece na lista do fórum.
+const PAPEIS = {
+  dono: 'Dono',
+  admin: 'Admin',
+  moderador: 'Moderação',
+  membro: 'Membro',
+}
 
 // Ícone da comunidade: a imagem enviada ou as iniciais do título.
 function CommunityIcon({ community, size = '' }) {
@@ -43,9 +63,11 @@ export function Community({ app }) {
   const [isOwner, setIsOwner] = useState(false)
   const [myRequest, setMyRequest] = useState(false)
   const [requests, setRequests] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
+  const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(''),
     [publishing, setPublishing] = useState(false),
     [attachment, setAttachment] = useState(null),
@@ -78,7 +100,7 @@ export function Community({ app }) {
       return
     }
 
-    const [membro, contagem, pedido, pedidos, feed] = await Promise.all([
+    const [membro, contagem, pedido, pedidos, lista, feed] = await Promise.all([
       supabase
         .from('comunidade_membros')
         .select('papel')
@@ -102,6 +124,14 @@ export function Community({ app }) {
         .eq('comunidade_id', comunidade.id)
         .eq('status', 'pendente')
         .order('criado_em', { ascending: true }),
+      // Lista de membros: o dono precisa dela para remover alguém do fórum.
+      supabase
+        .from('comunidade_membros')
+        .select(
+          'usuario_id, papel, entrou_em, usuario:profiles(username, display_name, avatar_url)'
+        )
+        .eq('comunidade_id', comunidade.id)
+        .order('entrou_em', { ascending: true }),
       // O RLS devolve só os posts dos fóruns em que a pessoa é membro.
       supabase
         .from('posts')
@@ -118,12 +148,14 @@ export function Community({ app }) {
     setMemberCount(contagem.count ?? 0)
     setMyRequest(Boolean(pedido.data))
     setRequests(comunidade.dono_id === app.user.id ? pedidos.data || [] : [])
+    setMembers(lista.data || [])
 
     const falha =
       membro.error ||
       contagem.error ||
       pedido.error ||
       pedidos.error ||
+      lista.error ||
       feed.error ||
       comunidadeError
     if (falha) {
@@ -203,10 +235,31 @@ export function Community({ app }) {
     if (selectedNotification?.comment_id && !openReplies.has(selectedNotification.post_id)) {
       setOpenReplies((current) => new Set(current).add(selectedNotification.post_id))
     }
+    // Quem abriu o link da notificação já leu o aviso: marca na hora, mesmo
+    // que o post ainda não tenha aparecido na tela.
+    if (
+      selectedNotification &&
+      !selectedNotification.read_at &&
+      !markingNotifications.current.has(selectedNotification.id)
+    ) {
+      markingNotifications.current.add(selectedNotification.id)
+      app
+        .markMentionAsRead(selectedNotification.id)
+        .then(() => navigate(location.pathname, { replace: true }))
+        .catch((readError) => {
+          markingNotifications.current.delete(selectedNotification.id)
+          setError(readError.message)
+        })
+    }
+    // Um post mais alto que a tela nunca chega a 35% de visibilidade: o aviso
+    // também conta como visto quando o post cobre boa parte da janela.
+    const postVisivel = (entry) =>
+      entry.intersectionRatio >= 0.35 ||
+      entry.intersectionRect.height >= window.innerHeight * 0.6
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting || entry.intersectionRatio < 0.35) continue
+          if (!entry.isIntersecting || !postVisivel(entry)) continue
           const notification = notifications.find((item) => {
             const targetId = item.comment_id ? `comment-${item.comment_id}` : `post-${item.post_id}`
             return targetId === entry.target.id
@@ -225,7 +278,7 @@ export function Community({ app }) {
             })
         }
       },
-      { threshold: [0.35] }
+      { threshold: [0, 0.1, 0.2, 0.35, 0.5, 0.75, 1] }
     )
     for (const notification of notifications) {
       const targetId = notification.comment_id
@@ -381,6 +434,27 @@ export function Community({ app }) {
       'Não foi possível responder ao pedido'
     )
 
+  // Ações do dono: todas passam pelas funções SECURITY DEFINER do banco,
+  // que conferem se quem chamou é o dono do fórum.
+  const removerMembro = (membro) => {
+    const nome = membro.usuario?.display_name || 'esta pessoa'
+    if (!window.confirm(`Remover ${nome} da comunidade?`)) return null
+    return acaoDeEntrada(
+      'remover_membro_comunidade',
+      { p_slug: slug, p_usuario_id: membro.usuario_id },
+      'Não foi possível remover o membro'
+    )
+  }
+
+  const apagarPost = (post) => {
+    if (!window.confirm('Apagar esta publicação do fórum?')) return null
+    return acaoDeEntrada(
+      'apagar_post_comunidade',
+      { p_slug: slug, p_post_id: post.id },
+      'Não foi possível apagar a publicação'
+    )
+  }
+
   if (loading) {
     return (
       <Page title="Comunidades" subtitle="Abrindo o fórum...">
@@ -442,7 +516,7 @@ export function Community({ app }) {
               </span>
               {isOwner && (
                 <span className="community-role">
-                  <Shield size={13} /> Você é o admin
+                  <Shield size={13} /> Você é o dono
                 </span>
               )}
             </span>
@@ -456,6 +530,11 @@ export function Community({ app }) {
                 onClick={sair}
               >
                 <LogOut /> Sair
+              </button>
+            )}
+            {isOwner && (
+              <button type="button" className="secondary" onClick={() => setEditing(true)}>
+                <Settings /> Configurar
               </button>
             )}
           </div>
@@ -500,7 +579,7 @@ export function Community({ app }) {
           {community.visibilidade === 'por_convite' &&
             (myRequest ? (
               <p className="playlist-status">
-                <Check /> Pedido enviado: o admin ainda não respondeu.
+                <Check /> Pedido enviado: o dono ainda não respondeu.
               </p>
             ) : (
               <button
@@ -551,6 +630,45 @@ export function Community({ app }) {
               </ul>
             </Section>
           )}
+          <Section title={`Membros (${members.length || memberCount})`}>
+            {members.length ? (
+              <ul className="invite-list">
+                {members.map((membro) => (
+                  <li className="invite-item" key={membro.usuario_id}>
+                    <button
+                      type="button"
+                      className="avatar-link"
+                      aria-label={`Ver perfil de ${membro.usuario?.display_name || 'Ouvinte Harmony'}`}
+                      onClick={() => membro.usuario && setProfilePopup(membro.usuario)}
+                    >
+                      <Avatar profile={membro.usuario} />
+                    </button>
+                    <span>
+                      <b>{membro.usuario?.display_name || 'Ouvinte Harmony'}</b>
+                      <small>
+                        @{membro.usuario?.username || 'ouvinte'} ·{' '}
+                        {PAPEIS[membro.papel] || PAPEIS.membro}
+                      </small>
+                    </span>
+                    {isOwner && membro.usuario_id !== app.user.id && (
+                      <span className="invite-actions">
+                        <button
+                          type="button"
+                          className="secondary small-button"
+                          disabled={Boolean(busy)}
+                          onClick={() => removerMembro(membro)}
+                        >
+                          <Trash2 size={14} /> Remover
+                        </button>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Empty text="Nenhum membro nesta comunidade." />
+            )}
+          </Section>
           <form className="composer" onSubmit={publish}>
             <Avatar profile={app.profile} />
             <MentionComposer
@@ -642,6 +760,16 @@ export function Community({ app }) {
                         <MessageCircle />
                         {post.post_comments?.length || 0} Responder
                       </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          className="like post-delete"
+                          disabled={busy === 'apagar_post_comunidade'}
+                          onClick={() => apagarPost(post)}
+                        >
+                          <Trash2 /> Apagar
+                        </button>
+                      )}
                     </div>
                     {openReplies.has(post.id) && (
                       <div className="post-replies">
@@ -707,6 +835,17 @@ export function Community({ app }) {
         </>
       )}
 
+      {editing && (
+        <CommunityEditorDialog
+          app={app}
+          community={community}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false)
+            load()
+          }}
+        />
+      )}
       {openedPlaylist && (
         <PlaylistDialog
           playlist={openedPlaylist}

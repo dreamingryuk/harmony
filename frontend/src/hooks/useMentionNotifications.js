@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { configured, supabase } from '../lib/supabase'
 
+// O histórico exibido na aba Notificações: as últimas 20 recebidas.
+const HISTORICO = 20
+
 export function useMentionNotifications(userId) {
   const [notifications, setNotifications] = useState([])
   const [error, setError] = useState('')
@@ -18,13 +21,25 @@ export function useMentionNotifications(userId) {
       )
       .eq('recipient_id', userId)
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(HISTORICO)
     if (queryError) {
       setError(`Não foi possível carregar notificações de menção: ${queryError.message}`)
       return
     }
+    // O texto da publicação e a comunidade de origem vêm em uma consulta à
+    // parte: se o post não estiver mais visível, a notificação continua na lista.
+    const linhas = data || []
+    const postIds = [...new Set(linhas.map((item) => item.post_id).filter(Boolean))]
+    let posts = {}
+    if (postIds.length) {
+      const { data: publicacoes } = await supabase
+        .from('posts')
+        .select('id, content, track, comunidade:comunidades(nome, slug)')
+        .in('id', postIds)
+      posts = Object.fromEntries((publicacoes || []).map((post) => [post.id, post]))
+    }
     setError('')
-    setNotifications(data || [])
+    setNotifications(linhas.map((item) => ({ ...item, post: posts[item.post_id] || null })))
   }, [userId])
 
   useEffect(() => {
@@ -42,6 +57,17 @@ export function useMentionNotifications(userId) {
         },
         load
       )
+      // Marcar como lida em outra aba também atualiza o contador daqui.
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'community_notifications',
+          filter: `recipient_id=eq.${userId}`,
+        },
+        load
+      )
       .subscribe()
     window.addEventListener('harmony-notifications-changed', load)
     return () => {
@@ -52,18 +78,20 @@ export function useMentionNotifications(userId) {
 
   const markAsRead = useCallback(
     async (notificationId) => {
+      const lidaEm = new Date().toISOString()
       const { error: updateError } = await supabase
         .from('community_notifications')
-        .update({ read_at: new Date().toISOString() })
+        .update({ read_at: lidaEm })
         .eq('id', notificationId)
         .eq('recipient_id', userId)
+        .is('read_at', null)
       if (updateError) {
         setError(`Não foi possível marcar a menção como vista: ${updateError.message}`)
         throw updateError
       }
       setNotifications((current) =>
         current.map((item) =>
-          item.id === notificationId ? { ...item, read_at: new Date().toISOString() } : item
+          item.id === notificationId ? { ...item, read_at: item.read_at || lidaEm } : item
         )
       )
       window.dispatchEvent(new Event('harmony-notifications-changed'))
@@ -71,10 +99,30 @@ export function useMentionNotifications(userId) {
     [userId]
   )
 
+  // Uma única atualização evita que a lista volte a aparecer como não lida
+  // no meio do caminho de um laço com várias chamadas.
+  const markAllAsRead = useCallback(async () => {
+    const lidaEm = new Date().toISOString()
+    const { error: updateError } = await supabase
+      .from('community_notifications')
+      .update({ read_at: lidaEm })
+      .eq('recipient_id', userId)
+      .is('read_at', null)
+    if (updateError) {
+      setError(`Não foi possível marcar as notificações como vistas: ${updateError.message}`)
+      throw updateError
+    }
+    setNotifications((current) =>
+      current.map((item) => (item.read_at ? item : { ...item, read_at: lidaEm }))
+    )
+    window.dispatchEvent(new Event('harmony-notifications-changed'))
+  }, [userId])
+
   return {
     mentionNotifications: notifications,
     unreadMentionCount: notifications.filter((item) => !item.read_at).length,
     mentionNotificationError: error,
     markMentionAsRead: markAsRead,
+    markAllMentionsAsRead: markAllAsRead,
   }
 }
